@@ -152,5 +152,5 @@ package-lock.json
 yarn.lock
 
 # Project specific
-migrations/
+# migrations/
 !migrations/__init__.py
