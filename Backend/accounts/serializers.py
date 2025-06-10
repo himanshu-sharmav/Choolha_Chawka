@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from rest_framework.authtoken.models import Token
-from .models import StudentProfile, RegularProfile
+from .models import StudentProfile, RegularProfile, MessOwnerProfile
 
 User = get_user_model()
 
@@ -36,13 +36,19 @@ class RegularProfileSerializer(serializers.ModelSerializer):
         model = RegularProfile
         fields = ('address', 'landmark')
 
+class MessOwnerProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MessOwnerProfile
+        fields = ('mess_name', 'business_address', 'business_phone', 'business_email', 'gst_number')
+
 class UserProfileSerializer(serializers.ModelSerializer):
     student_profile = StudentProfileSerializer(read_only=False, required=False)
     regular_profile = RegularProfileSerializer(read_only=False, required=False)
+    mess_owner_profile = MessOwnerProfileSerializer(read_only=False, required=False)
 
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'phone', 'user_type', 
                   'is_tiffin_user', 'is_mess_user', 'preferred_delivery_time', 
-                  'status', 'student_profile', 'regular_profile')
+                  'status', 'student_profile', 'regular_profile', 'mess_owner_profile')
         read_only_fields = ('id', 'username', 'email', 'phone', 'status')
