@@ -86,13 +86,25 @@ AUTH_USER_MODEL = 'accounts.User'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql_psycopg2',
+#         'NAME': 'ChoolaChawka_dev',
+#         'USER': 'postgres',
+#         'PASSWORD': 'Himan123@',
+#         'HOST': 'localhost',
+#         'PORT': '5432',
+#     }
+# }
+
+# When using docker container
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'ChoolaChawka_dev',
-        'USER': 'postgres',
-        'PASSWORD': 'Himan123@',
-        'HOST': 'localhost',
+        'NAME': 'choola_chawka_db',
+        'USER': 'choola_user',
+        'PASSWORD': 'securepassword123',
+        'HOST': 'db',
         'PORT': '5432',
     }
 }
