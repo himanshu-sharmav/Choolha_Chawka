@@ -7,6 +7,7 @@ class User(AbstractUser):
     USER_TYPE_CHOICES = [
         ('student', 'Student'),
         ('regular', 'Regular Customer'),
+        ('mess_owner', 'Mess Owner'),  # Added this
     ]
     STATUS_CHOICES = [
         ('unverified', 'Unverified'),
@@ -24,7 +25,7 @@ class User(AbstractUser):
     phone_verification_otp = models.CharField(max_length=6, blank=True)
     otp_expiry = models.DateTimeField(null=True, blank=True)
     
-    # Preference Fields
+    # Preference Fields (not used for mess_owner)
     is_tiffin_user = models.BooleanField(default=False)
     is_mess_user = models.BooleanField(default=False)
     preferred_delivery_time = models.CharField(max_length=100, blank=True)
@@ -47,16 +48,20 @@ class User(AbstractUser):
         
         self.phone_verified = True
         self.phone_verification_otp = ''
-        self.status = 'registration_complete'
+        # Auto-complete status for mess owners
+        if self.user_type == 'mess_owner':
+            self.status = 'profile_complete'
+        else:
+            self.status = 'registration_complete'
         self.save(update_fields=['phone_verified', 'phone_verification_otp', 'status'])
         return True, "Phone verified successfully"
     
     def generate_and_send_otp(self):
-        """Generate an OTP, save it, and send via Twilio"""
+        """Generate an OTP, save it, and send via SMS"""
         from core.sms import send_otp
         otp = self.generate_otp()
         
-        # Send OTP via Twilio
+        # Send OTP via SMS
         response = send_otp(self.phone, otp)
         return otp, response['success']
     
@@ -68,7 +73,6 @@ class User(AbstractUser):
     def __str__(self):
         return f"{self.username} ({self.phone})"
 
-
 class StudentProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile')
     institute = models.CharField(max_length=100)
@@ -78,7 +82,6 @@ class StudentProfile(models.Model):
     def __str__(self):
         return f"Student: {self.user.username}"
 
-
 class RegularProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='regular_profile')
     address = models.TextField()
@@ -87,6 +90,16 @@ class RegularProfile(models.Model):
     def __str__(self):
         return f"Regular: {self.user.username}"
 
+class MessOwnerProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='mess_owner_profile')
+    mess_name = models.CharField(max_length=100)
+    business_address = models.TextField()
+    business_phone = models.CharField(max_length=15, blank=True)
+    business_email = models.EmailField(blank=True)
+    gst_number = models.CharField(max_length=20, blank=True)
+    
+    def __str__(self):
+        return f"Mess Owner: {self.user.username} - {self.mess_name}"
 
 class OTPVerificationAttempt(models.Model):
     """Track verification attempts to prevent brute force"""
@@ -107,7 +120,6 @@ class OTPVerificationAttempt(models.Model):
     
     def __str__(self):
         return f"{self.user.username} - {self.attempt_time} - {'Success' if self.successful else 'Failed'}"
-
 
 class OTPThrottle(models.Model):
     """Track OTP sends per phone to prevent abuse"""

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, StudentProfile, RegularProfile, OTPVerificationAttempt, OTPThrottle
+from .models import User, StudentProfile, RegularProfile, MessOwnerProfile, OTPVerificationAttempt, OTPThrottle
 
 class StudentProfileInline(admin.StackedInline):
     model = StudentProfile
@@ -8,6 +8,10 @@ class StudentProfileInline(admin.StackedInline):
 
 class RegularProfileInline(admin.StackedInline):
     model = RegularProfile
+    can_delete = False
+
+class MessOwnerProfileInline(admin.StackedInline):
+    model = MessOwnerProfile
     can_delete = False
 
 class CustomUserAdmin(UserAdmin):
@@ -27,10 +31,13 @@ class CustomUserAdmin(UserAdmin):
             return [StudentProfileInline]
         elif obj.user_type == 'regular':
             return [RegularProfileInline]
+        elif obj.user_type == 'mess_owner':
+            return [MessOwnerProfileInline]
         return []
 
 admin.site.register(User, CustomUserAdmin)
 admin.site.register(StudentProfile)
 admin.site.register(RegularProfile)
+admin.site.register(MessOwnerProfile)
 admin.site.register(OTPVerificationAttempt)
 admin.site.register(OTPThrottle)

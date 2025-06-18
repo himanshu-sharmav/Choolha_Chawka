@@ -26,9 +26,10 @@ urlpatterns = [
     
     # API endpoints for each app
     path('api/accounts/', include('accounts.urls')),
-    # path('api/subscriptions/', include('subscriptions.urls')),
+    path('api/subscriptions/', include('subscriptions.urls')),
     # path('api/payments/', include('payments.urls')),
-    
+     # Mess owner dashboard APIs
+    path('api/owner/', include('owner.urls')),
     # API Documentation (optional, but helpful)
     # path('api/docs/', include_docs_urls(title='Choolha Chawka API')),
     

@@ -8,9 +8,10 @@ from .serializers import (
     UserRegistrationSerializer, 
     UserProfileSerializer, 
     StudentProfileSerializer, 
-    RegularProfileSerializer
+    RegularProfileSerializer,
+    MessOwnerProfileSerializer
 )
-from .models import OTPThrottle, OTPVerificationAttempt, StudentProfile, RegularProfile
+from .models import OTPThrottle, OTPVerificationAttempt, StudentProfile, RegularProfile,MessOwnerProfile
 
 User = get_user_model()
 
@@ -152,6 +153,7 @@ class UserProfileView(APIView):
         serializer = UserProfileSerializer(request.user)
         return Response(serializer.data)
 
+
 class CompleteProfileView(APIView):
     permission_classes = [IsAuthenticated]
     
@@ -159,57 +161,100 @@ class CompleteProfileView(APIView):
         user = request.user
         data = request.data
         
-        # Update common user fields
+        # Update user type
         user.user_type = data.get('user_type', user.user_type)
-        user.is_tiffin_user = data.get('is_tiffin_user', user.is_tiffin_user)
-        user.is_mess_user = data.get('is_mess_user', user.is_mess_user)
-        user.preferred_delivery_time = data.get('preferred_delivery_time', user.preferred_delivery_time)
-        user.save()
         
-        # Create or update type-specific profile
-        if user.user_type == 'student':
-            student_data = data.get('student_profile', {})
-            if not student_data:
+        # Handle mess owner profile
+        if user.user_type == 'mess_owner':
+            mess_owner_data = data.get('mess_owner_profile', {})
+            if not mess_owner_data:
                 return Response({
                     'success': False,
-                    'message': 'Student profile data required'
+                    'message': 'Mess owner profile data required'
                 }, status=status.HTTP_400_BAD_REQUEST)
-                
-            student_profile, created = StudentProfile.objects.get_or_create(user=user)
-            student_profile.institute = student_data.get('institute', '')
-            student_profile.student_id = student_data.get('student_id', '')
-            student_profile.hostel = student_data.get('hostel', '')
-            student_profile.save()
             
-            # Clean up any existing regular profile
+            # Create or update mess owner profile
+            mess_owner_profile, created = MessOwnerProfile.objects.get_or_create(user=user)
+            mess_owner_profile.mess_name = mess_owner_data.get('mess_name', '')
+            mess_owner_profile.business_address = mess_owner_data.get('business_address', '')
+            mess_owner_profile.business_phone = mess_owner_data.get('business_phone', '')
+            mess_owner_profile.business_email = mess_owner_data.get('business_email', '')
+            mess_owner_profile.gst_number = mess_owner_data.get('gst_number', '')
+            mess_owner_profile.save()
+            
+            # Clean up any customer profiles
+            StudentProfile.objects.filter(user=user).delete()
             RegularProfile.objects.filter(user=user).delete()
             
-        elif user.user_type == 'regular':
-            regular_data = data.get('regular_profile', {})
-            if not regular_data:
-                return Response({
-                    'success': False,
-                    'message': 'Regular profile data required'
-                }, status=status.HTTP_400_BAD_REQUEST)
-                
-            regular_profile, created = RegularProfile.objects.get_or_create(user=user)
-            regular_profile.address = regular_data.get('address', '')
-            regular_profile.landmark = regular_data.get('landmark', '')
-            regular_profile.save()
-            
-            # Clean up any existing student profile
-            StudentProfile.objects.filter(user=user).delete()
-        
-        # Update user status to profile_complete if all required fields are filled
-        profile_complete = False
-        
-        if user.user_type == 'student':
-            profile_complete = hasattr(user, 'student_profile') and bool(user.student_profile.institute) and bool(user.student_profile.hostel)
-        elif user.user_type == 'regular':
-            profile_complete = hasattr(user, 'regular_profile') and bool(user.regular_profile.address)
-            
-        if profile_complete and (user.is_tiffin_user or user.is_mess_user) and user.status == 'registration_complete':
+            # Auto-complete profile for mess owners
             user.complete_profile()
+            
+        elif user.user_type in ['student', 'regular']:
+            # Handle customer types (existing logic)
+            user.is_tiffin_user = data.get('is_tiffin_user', user.is_tiffin_user)
+            user.is_mess_user = data.get('is_mess_user', user.is_mess_user)
+            user.preferred_delivery_time = data.get('preferred_delivery_time', user.preferred_delivery_time)
+            
+            if user.user_type == 'student':
+                student_data = data.get('student_profile', {})
+                if not student_data:
+                    return Response({
+                        'success': False,
+                        'message': 'Student profile data required'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                    
+                student_profile, created = StudentProfile.objects.get_or_create(user=user)
+                student_profile.institute = student_data.get('institute', '')
+                student_profile.student_id = student_data.get('student_id', '')
+                student_profile.hostel = student_data.get('hostel', '')
+                student_profile.save()
+                
+                # Clean up other profiles
+                RegularProfile.objects.filter(user=user).delete()
+                MessOwnerProfile.objects.filter(user=user).delete()
+                
+            elif user.user_type == 'regular':
+                regular_data = data.get('regular_profile', {})
+                if not regular_data:
+                    return Response({
+                        'success': False,
+                        'message': 'Regular profile data required'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                    
+                regular_profile, created = RegularProfile.objects.get_or_create(user=user)
+                regular_profile.address = regular_data.get('address', '')
+                regular_profile.landmark = regular_data.get('landmark', '')
+                regular_profile.save()
+                
+                # Clean up other profiles
+                StudentProfile.objects.filter(user=user).delete()
+                MessOwnerProfile.objects.filter(user=user).delete()
+            
+            # Check profile completion for customers
+            profile_complete = False
+            if user.user_type == 'student':
+                profile_complete = (
+                    hasattr(user, 'student_profile') and 
+                    bool(user.student_profile.institute) and 
+                    bool(user.student_profile.hostel)
+                )
+            elif user.user_type == 'regular':
+                profile_complete = (
+                    hasattr(user, 'regular_profile') and 
+                    bool(user.regular_profile.address)
+                )
+                
+            if (profile_complete and 
+                (user.is_tiffin_user or user.is_mess_user) and 
+                user.status == 'registration_complete'):
+                user.complete_profile()
+        else:
+            return Response({
+                'success': False,
+                'message': 'Invalid user type'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        user.save()
         
         return Response({
             'success': True,
