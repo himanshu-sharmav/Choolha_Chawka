@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Payment Receipt</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .receipt-details { margin: 20px 0; }
+        .amount { font-size: 24px; font-weight: bold; color: #2e7d32; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f5f5f5; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Choolha Chawka</h1>
+        <h2>Payment Receipt</h2>
+    </div>
+    
+    <div class="receipt-details">
+        <p><strong>Receipt ID:</strong> {{ payment.transaction_id }}</p>
+        <p><strong>Date:</strong> {{ payment.created_at|date:"F d, Y" }}</p>
+        <p><strong>Status:</strong> {{ payment.status }}</p>
+    </div>
+    
+    <table>
+        <tr>
+            <th>Customer Details</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>Name</td>
+            <td>{{ user.get_full_name|default:user.username }}</td>
+        </tr>
+        <tr>
+            <td>Email</td>
+            <td>{{ user.email }}</td>
+        </tr>
+        <tr>
+            <td>Phone</td>
+            <td>{{ user.phone }}</td>
+        </tr>
+    </table>
+    
+    {% if subscription %}
+    <table>
+        <tr>
+            <th>Subscription Details</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>Plan</td>
+            <td>{{ plan.name }}</td>
+        </tr>
+        <tr>
+            <td>Service Type</td>
+            <td>{{ subscription.subscription_type|title }}</td>
+        </tr>
+        <tr>
+            <td>Duration</td>
+            <td>{{ plan.duration_days }} days</td>
+        </tr>
+    </table>
+    {% endif %}
+    
+    <div class="amount">
+        <p>Total Amount Paid: ₹{{ payment.amount|floatformat:0|add:"0"|div:"100" }}</p>
+    </div>
+    
+    <p><em>Thank you for choosing Choolha Chawka!</em></p>
+</body>
+</html>

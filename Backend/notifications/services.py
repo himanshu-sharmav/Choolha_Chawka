@@ -4,6 +4,7 @@ from django.conf import settings
 from django.template import Template, Context
 from core.sms import send_sms  # Your existing SMS function
 from .models import NotificationTemplate, NotificationLog
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 

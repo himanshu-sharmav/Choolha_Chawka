@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'accounts',
     'subscriptions',
     'payments',
+    'notifications',
     'core',
 ]
 
@@ -179,4 +180,4 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = env('MAILCHIMP_USERNAME')
 EMAIL_HOST_PASSWORD = env('MAILCHIMP_API_KEY')
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', 'noreply@choolhachawka.com')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
