@@ -2,6 +2,10 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from rest_framework.authtoken.models import Token
 from .models import StudentProfile, RegularProfile, MessOwnerProfile
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.core.exceptions import ValidationError
 
 User = get_user_model()
 
@@ -52,3 +56,53 @@ class UserProfileSerializer(serializers.ModelSerializer):
                   'is_tiffin_user', 'is_mess_user', 'preferred_delivery_time', 
                   'status', 'student_profile', 'regular_profile', 'mess_owner_profile')
         read_only_fields = ('id', 'username', 'email', 'phone', 'status')
+
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    
+    def validate_email(self, value):
+        try:
+            user = User.objects.get(email=value)
+            return value
+        except User.DoesNotExist:
+            raise serializers.ValidationError("No user found with this email address")
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uidb64 = serializers.CharField()
+    token = serializers.CharField()
+    new_password = serializers.CharField(min_length=8)
+    confirm_password = serializers.CharField(min_length=8)
+    
+    def validate(self, data):
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError("Passwords don't match")
+        
+        try:
+            uid = force_str(urlsafe_base64_decode(data['uidb64']))
+            user = User.objects.get(pk=uid)
+            
+            if not default_token_generator.check_token(user, data['token']):
+                raise serializers.ValidationError("Invalid or expired token")
+                
+            data['user'] = user
+            return data
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            raise serializers.ValidationError("Invalid token")
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField()
+    new_password = serializers.CharField(min_length=8)
+    confirm_password = serializers.CharField(min_length=8)
+    
+    def validate(self, data):
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError("New passwords don't match")
+        return data
+    
+    def validate_old_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Current password is incorrect")
+        return value

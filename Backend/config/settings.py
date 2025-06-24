@@ -172,8 +172,11 @@ TWILIO_PHONE_NUMBER = env('TWILIO_PHONE_NUMBER')
 RAZORPAY_KEY_ID = env('RAZORPAY_KEY_ID')
 RAZORPAY_KEY_SECRET = env('RAZORPAY_KEY_SECRET')
 
-# Email settings
-MAILCHIMP_USERNAME=env('MAILCHIMP_USERNAME')
-EMAIL_HOST = env('EMAIL_HOST')
-MAILCHIMP_API_KEY=env('MAILCHIMP_API_KEY')
-DEFAULT_FROM_EMAIL='noreply@choolhachawka.com'
+# settings.py - ONLY CHANGE THIS
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.mandrillapp.com'  # Mailchimp Transactional SMTP
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = env('MAILCHIMP_USERNAME')
+EMAIL_HOST_PASSWORD = env('MAILCHIMP_API_KEY')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', 'noreply@choolhachawka.com')

@@ -11,7 +11,17 @@ from .serializers import (
     RegularProfileSerializer,
     MessOwnerProfileSerializer
 )
+from notifications.services import send_welcome_email, send_profile_complete_email
 from .models import OTPThrottle, OTPVerificationAttempt, StudentProfile, RegularProfile,MessOwnerProfile
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
+from notifications.services import send_password_reset_email, send_password_changed_email
+from .serializers import (
+    PasswordResetRequestSerializer,
+    PasswordResetConfirmSerializer,
+    ChangePasswordSerializer
+)
 
 User = get_user_model()
 
@@ -85,6 +95,14 @@ class VerifyOTPView(APIView):
                 # Create auth token
                 token, created = Token.objects.get_or_create(user=user)
                 
+                 # Send welcome email for first-time phone verification
+                if user.status in ['registration_complete', 'profile_complete']:
+                    try:
+                        send_welcome_email(user)
+                    except Exception as e:
+                        # Log error but don't fail the verification
+                        print(f"Failed to send welcome email: {e}")
+
                 return Response({
                     'success': True,
                     'message': message,
@@ -161,6 +179,8 @@ class CompleteProfileView(APIView):
         user = request.user
         data = request.data
         
+         # Track if profile was completed in this request
+        was_profile_incomplete = user.status != 'profile_complete'
         # Update user type
         user.user_type = data.get('user_type', user.user_type)
         
@@ -255,9 +275,95 @@ class CompleteProfileView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         user.save()
+
+        # Send profile complete email if profile was just completed
+        if was_profile_incomplete and user.status == 'profile_complete':
+            try:
+                send_profile_complete_email(user)
+            except Exception as e:
+                # Log error but don't fail the profile completion
+                print(f"Failed to send profile complete email: {e}")
         
         return Response({
             'success': True,
             'message': 'Profile updated successfully',
             'data': UserProfileSerializer(user).data
+        })
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        email = serializer.validated_data['email']
+        user = User.objects.get(email=email)
+        
+        # Generate token
+        token = default_token_generator.make_token(user)
+        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+        
+        # Send password reset email
+        try:
+            send_password_reset_email(user, uidb64, token)
+            return Response({
+                'success': True,
+                'message': 'Password reset email sent successfully'
+            })
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': 'Failed to send password reset email'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        user = serializer.validated_data['user']
+        new_password = serializer.validated_data['new_password']
+        
+        # Set new password
+        user.set_password(new_password)
+        user.save()
+        
+        # Send confirmation email
+        try:
+            send_password_changed_email(user)
+        except Exception as e:
+            print(f"Failed to send password changed email: {e}")
+        
+        return Response({
+            'success': True,
+            'message': 'Password reset successfully'
+        })
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        
+        user = request.user
+        new_password = serializer.validated_data['new_password']
+        
+        # Set new password
+        user.set_password(new_password)
+        user.save()
+        
+        # Send confirmation email
+        try:
+            send_password_changed_email(user)
+        except Exception as e:
+            print(f"Failed to send password changed email: {e}")
+        
+        return Response({
+            'success': True,
+            'message': 'Password changed successfully'
         })
