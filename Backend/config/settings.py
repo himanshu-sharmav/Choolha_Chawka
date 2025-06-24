@@ -86,28 +86,28 @@ AUTH_USER_MODEL = 'accounts.User'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-#         'NAME': 'ChoolaChawka_dev',
-#         'USER': 'postgres',
-#         'PASSWORD': 'Himan123@',
-#         'HOST': 'localhost',
-#         'PORT': '5432',
-#     }
-# }
-
-# When using docker container
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'choola_chawka_db',
-        'USER': 'choola_user',
-        'PASSWORD': 'securepassword123',
-        'HOST': 'db',
+        'NAME': 'ChoolaChawka_dev',
+        'USER': 'postgres',
+        'PASSWORD': 'Himan123@',
+        'HOST': 'localhost',
         'PORT': '5432',
     }
 }
+
+# When using docker container
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql_psycopg2',
+#         'NAME': 'choola_chawka_db',
+#         'USER': 'choola_user',
+#         'PASSWORD': 'securepassword123',
+#         'HOST': 'db',
+#         'PORT': '5432',
+#     }
+# }
 
 
 # Password validation
@@ -171,3 +171,9 @@ TWILIO_PHONE_NUMBER = env('TWILIO_PHONE_NUMBER')
 # Razorpay settings
 RAZORPAY_KEY_ID = env('RAZORPAY_KEY_ID')
 RAZORPAY_KEY_SECRET = env('RAZORPAY_KEY_SECRET')
+
+# Email settings
+MAILCHIMP_USERNAME=env('MAILCHIMP_USERNAME')
+EMAIL_HOST = env('EMAIL_HOST')
+MAILCHIMP_API_KEY=env('MAILCHIMP_API_KEY')
+DEFAULT_FROM_EMAIL='noreply@choolhachawka.com'
