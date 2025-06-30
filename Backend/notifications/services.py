@@ -2,19 +2,17 @@ import logging
 from django.core.mail import send_mail
 from django.conf import settings
 from django.template import Template, Context
-from core.sms import send_sms  # Your existing SMS function
+from core.sms import send_sms  
 from .models import NotificationTemplate, NotificationLog
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
+
 class NotificationService:
     
     @staticmethod
     def send_notification(user, notification_type, context_data=None, recipient_email=None, recipient_phone=None):
-        """
-        Send notification to user based on type
-        """
         try:
             # Get template
             template = NotificationTemplate.objects.get(
@@ -36,12 +34,13 @@ class NotificationService:
             success = True
             error_message = ""
             
-            # Send Email
+            # Send Email using Django's send_mail (now with SendGrid SMTP)
             if template.channel in ['email', 'both'] and email:
                 try:
                     subject = Template(template.subject).render(Context(context_data))
                     message = Template(template.email_template).render(Context(context_data))
                     
+                    # 🔥 Use Django's send_mail with SendGrid SMTP backend
                     send_mail(
                         subject=subject,
                         message=message,
@@ -49,6 +48,8 @@ class NotificationService:
                         recipient_list=[email],
                         fail_silently=False,
                     )
+                    
+                    status = 'sent'
                     
                     # Log email notification
                     NotificationLog.objects.create(
@@ -58,15 +59,27 @@ class NotificationService:
                         recipient_email=email,
                         subject=subject,
                         message=message,
-                        status='sent'
+                        status=status
                     )
                     
                 except Exception as e:
                     logger.error(f"Email notification failed: {str(e)}")
                     error_message += f"Email failed: {str(e)}; "
                     success = False
+                    
+                    # Log failed email notification
+                    NotificationLog.objects.create(
+                        user=user,
+                        notification_type=notification_type,
+                        channel='email',
+                        recipient_email=email,
+                        subject=subject if 'subject' in locals() else '',
+                        message=message if 'message' in locals() else '',
+                        status='failed',
+                        error_message=str(e)
+                    )
             
-            # Send SMS
+            # Send SMS (unchanged)
             if template.channel in ['sms', 'both'] and phone:
                 try:
                     sms_message = Template(template.sms_template).render(Context(context_data))
@@ -215,7 +228,6 @@ class NotificationService:
         for owner in mess_owners:
             NotificationService.send_notification(owner, 'new_user_joined', context)
 
-
     @staticmethod
     def send_subscription_cancelled_email(user, subscription):
         """Send email when subscription is cancelled"""
@@ -229,7 +241,6 @@ class NotificationService:
         }
         return NotificationService.send_notification(user, 'subscription_cancelled', context)        
     
-
     @staticmethod
     def send_payment_failed_email(user, subscription, order):
         """Send email when payment fails"""
@@ -265,6 +276,7 @@ class NotificationService:
             'refund_id': refund_request.gateway_refund_id or refund_request.refund_transaction_id,
         }
         return NotificationService.send_notification(user, 'refund_processed', context)
+    
     @staticmethod
     def send_refund_rejected_email(user, refund_request):
         """Send email when refund is rejected"""
@@ -308,7 +320,6 @@ class NotificationService:
         }
         return NotificationService.send_notification(user, 'payment_reminder', context)
 
-
     @staticmethod
     def send_subscription_expired_email(user, subscription):
         """Send email when subscription has expired"""
@@ -331,8 +342,10 @@ class NotificationService:
             'end_date': new_subscription.adjusted_end_date,
             'amount': new_subscription.total_paid,
         }
+        return NotificationService.send_notification(user, 'subscription_renewed', context)
 
-    # Convenience functions
+
+# Convenience functions
 def send_welcome_email(user):
     return NotificationService.send_welcome_email(user)
 
