@@ -4,6 +4,11 @@ import hashlib
 from django.conf import settings
 from django.utils import timezone
 from .models import RazorpayOrder, Payment, RefundRequest
+from notifications.services import (
+    send_payment_success_email, send_new_user_joined_email, 
+    send_payment_failed_email
+)
+from accounts.models import User
 
 class RazorpayService:
     def __init__(self):
@@ -46,7 +51,7 @@ class RazorpayService:
         try:
             # Get order from database
             order = RazorpayOrder.objects.select_related(
-                'subscription', 'user'
+                'subscription', 'subscription__plan', 'user'
             ).get(order_id=order_id)
             
             # Verify signature
@@ -85,6 +90,20 @@ class RazorpayService:
             subscription.payment_transaction_id = payment_id
             subscription.save()
             
+            # 🔥 NOTIFICATIONS AFTER SUCCESSFUL PAYMENT
+            try:
+                # 1. Send payment success email to user
+                send_payment_success_email(subscription.user, subscription, payment)
+                
+                # 2. Notify mess owners about new user joining
+                mess_owners = User.objects.filter(user_type='mess_owner')
+                if mess_owners.exists():
+                    send_new_user_joined_email(mess_owners, subscription.user, subscription)
+                    
+            except Exception as e:
+                # Log error but don't fail the payment verification
+                print(f"Failed to send payment success notifications: {e}")
+            
             return payment, subscription
             
         except RazorpayOrder.DoesNotExist:
@@ -92,8 +111,8 @@ class RazorpayService:
         except Exception as e:
             # Create failed payment record
             try:
-                order = RazorpayOrder.objects.get(order_id=order_id)
-                Payment.objects.create(
+                order = RazorpayOrder.objects.select_related('subscription', 'user').get(order_id=order_id)
+                failed_payment = Payment.objects.create(
                     user=order.user,
                     subscription=order.subscription,
                     payment_gateway='razorpay',
@@ -103,8 +122,15 @@ class RazorpayService:
                     gateway_order_id=order_id,
                     failure_reason=str(e)
                 )
-            except:
-                pass
+                
+                # 🔥 NOTIFICATION FOR FAILED PAYMENT
+                try:
+                    send_payment_failed_email(order.user, order.subscription, failed_payment)
+                except Exception as notification_error:
+                    print(f"Failed to send payment failed notification: {notification_error}")
+                
+            except Exception as db_error:
+                print(f"Failed to create failed payment record: {db_error}")
             raise e
 
 razorpay_service = RazorpayService()

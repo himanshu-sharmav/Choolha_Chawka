@@ -5,7 +5,10 @@ from .views import (
     VerifyOTPView, 
     ResendOTPView, 
     UserProfileView,
-    CompleteProfileView
+    CompleteProfileView,
+    PasswordResetRequestView,
+    PasswordResetConfirmView,
+    ChangePasswordView
 )
 
 urlpatterns = [
@@ -15,4 +18,7 @@ urlpatterns = [
     path('login/', obtain_auth_token, name='login'),
     path('profile/', UserProfileView.as_view(), name='profile'),
     path('complete-profile/', CompleteProfileView.as_view(), name='complete-profile'),
+    path('password-reset/', PasswordResetRequestView.as_view(), name='password-reset'),
+    path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
+    path('change-password/', ChangePasswordView.as_view(), name='change-password'),
 ]

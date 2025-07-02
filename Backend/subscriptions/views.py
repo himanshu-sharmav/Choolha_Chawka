@@ -1,3 +1,4 @@
+from datetime import timedelta
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -8,6 +9,10 @@ from .models import Plan, Subscription, Leave
 from .serializers import (
     PlanSerializer, SubscriptionSerializer, SubscriptionCreateSerializer,
     LeaveSerializer, LeaveCreateSerializer, LeaveAdminSerializer
+)
+from notifications.services import (
+    send_subscription_created_email, send_leave_submitted_email,
+    send_leave_approved_email, send_leave_rejected_email, send_new_user_joined_email,send_subscription_cancelled_email,send_subscription_renewed_email
 )
 
 class PlanViewSet(viewsets.ReadOnlyModelViewSet):
@@ -38,6 +43,24 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             return SubscriptionCreateSerializer
         return SubscriptionSerializer
     
+    def create(self, request, *args, **kwargs):
+        """Create a new subscription"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        subscription = serializer.save(user=request.user)
+        
+        # 🔥 ADD NOTIFICATION HERE - After subscription creation
+        try:
+            send_subscription_created_email(request.user, subscription)
+        except Exception as e:
+            print(f"Failed to send subscription created email: {e}")
+        
+        return Response({
+            'success': True,
+            'message': 'Subscription created successfully',
+            'data': SubscriptionSerializer(subscription).data
+        }, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
         """Cancel a subscription and calculate refund"""
@@ -59,6 +82,11 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         subscription.refund_status = 'PENDING' if refund_amount > 0 else 'NOT_APPLICABLE'
         subscription.save()
         
+        try:
+            send_subscription_cancelled_email(request.user, subscription)
+        except Exception as e:
+            print(f"Failed to send subscription cancelled email: {e}")
+        
         return Response({
             'success': True,
             'message': 'Subscription cancelled successfully',
@@ -77,6 +105,48 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         return Response({
             'message': 'No active subscription found'
         }, status=status.HTTP_404_NOT_FOUND)
+    
+    @action(detail=True, methods=['post'])
+    def renew(self, request, pk=None):
+        """Renew an expired or expiring subscription"""
+        old_subscription = self.get_object()
+        
+        if old_subscription.status not in ['ACTIVE', 'EXPIRED']:
+            return Response({
+                'success': False,
+                'message': 'Only active or expired subscriptions can be renewed'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create new subscription
+        new_subscription = Subscription.objects.create(
+            user=old_subscription.user,
+            plan=old_subscription.plan,
+            breakfast_included=old_subscription.breakfast_included,
+            base_price=old_subscription.plan.base_price,
+            breakfast_addon_price=old_subscription.plan.breakfast_addon_price if old_subscription.breakfast_included else 0,
+            subscription_type=old_subscription.subscription_type,
+            start_date=old_subscription.adjusted_end_date + timedelta(days=1),  # Start after old subscription ends
+        )
+        new_subscription.calculate_total_and_end_date()
+        new_subscription.save()
+        
+        # Mark old subscription as renewed
+        old_subscription.status = 'RENEWED'
+        old_subscription.save()
+        
+        # Send renewal notification
+        try:
+            send_subscription_renewed_email(request.user, old_subscription, new_subscription)
+        except Exception as e:
+            print(f"Failed to send renewal notification: {e}")
+        
+        return Response({
+            'success': True,
+            'message': 'Subscription renewed successfully',
+            'old_subscription_id': old_subscription.id,
+            'new_subscription_id': new_subscription.id,
+            'new_subscription': SubscriptionSerializer(new_subscription).data
+        })
 
 class LeaveViewSet(viewsets.ModelViewSet):
     """ViewSet for managing leave requests"""
@@ -113,6 +183,11 @@ class LeaveViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         leave = serializer.save()
         
+        try:
+            send_leave_submitted_email(request.user, leave)
+        except Exception as e:
+            print(f"Failed to send leave submitted email: {e}")
+
         return Response({
             'success': True,
             'message': f'Leave request submitted for {leave.duration_days} days. Awaiting admin approval.',
@@ -134,6 +209,11 @@ class LeaveViewSet(viewsets.ModelViewSet):
         
         leave.approve_leave(request.user, comment)
         
+        try:
+            send_leave_approved_email(leave.subscription.user, leave)
+        except Exception as e:
+            print(f"Failed to send leave approved email: {e}")
+
         return Response({
             'success': True,
             'message': f'Leave approved for {leave.duration_days} days',
@@ -154,6 +234,11 @@ class LeaveViewSet(viewsets.ModelViewSet):
         
         leave.reject_leave(request.user, comment)
         
+        try:
+            send_leave_rejected_email(leave.subscription.user, leave)
+        except Exception as e:
+            print(f"Failed to send leave rejected email: {e}")
+
         return Response({
             'success': True,
             'message': 'Leave request rejected',
