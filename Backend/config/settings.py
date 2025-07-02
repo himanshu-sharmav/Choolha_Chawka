@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'payments',
     'notifications',
     'core',
+    'feedback',
 ]
 
 MIDDLEWARE = [
@@ -181,3 +182,37 @@ RAZORPAY_KEY_SECRET = env('RAZORPAY_KEY_SECRET')
 # EMAIL_HOST_USER = env('MAILCHIMP_USERNAME')
 # EMAIL_HOST_PASSWORD = env('MAILCHIMP_API_KEY')
 # DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
+# MAILCHIMP_API_KEY = env('MAILCHIMP_API_KEY')
+# settings.py
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'email-smtp.ap-south-1.amazonaws.com'
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = env('AWS_SES_SMTP_USER')
+# EMAIL_HOST_PASSWORD = env('AWS_SES_SMTP_PASSWORD')
+
+# EMAIL_HOST = 'smtp.sendgrid.net'
+# EMAIL_PORT = 587
+# EMAIL_HOST_USER = 'apikey'
+# EMAIL_HOST_PASSWORD = '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'
+
+#Resend Email Config
+# settings.py - Resend SMTP Configuration
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.resend.com'
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = 'resend'  # This is literally the string 'resend'
+# EMAIL_HOST_PASSWORD = env('RESEND_API_KEY')  # Your Resend API key
+# DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'  # Your verified domain
+SERVER_EMAIL = 'noreply@choolhachowka.com'
+
+
+
+DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'
+
+# DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'
+EMAIL_USE_LOCALTIME = False
+SUPPORT_EMAIL= 'himan8953201946@gmail.com'
+
+FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')  # Placeholder URL

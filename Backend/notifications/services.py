@@ -4,7 +4,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 from django.utils.html import strip_tags
 from django.utils import timezone
-from core.sms import send_sms  # Your existing SMS function
+from core.sms import send_sms  
 from .models import NotificationLog
 
 logger = logging.getLogger(__name__)
