@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>New Leave Request</title>
+</head>
+<body>
+    <h2>Dear Mess Owner,</h2>
+    <p>User <strong>{{ user_name }}</strong> ({{ user_phone }}) has submitted a new leave request:</p>
+    <ul>
+        <li>Leave Dates: {{ start_date }} to {{ end_date }}</li>
+        <li>Days: {{ leave_days }}</li>
+        <li>Reason: {{ reason }}</li>
+    </ul>
+    <p><a href="{{ dashboard_url }}">View in Dashboard</a></p>
+    <p>Best regards,<br>Choolha Chawka Team</p>
+</body>
+</html>

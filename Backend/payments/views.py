@@ -14,7 +14,9 @@ from .serializers import (
 from .services import razorpay_service
 from subscriptions.models import Subscription
 from django.conf import settings
-from notifications.services import send_refund_processed_email, send_refund_rejected_email
+# from notifications.services import send_refund_processed_email, send_refund_rejected_email
+from notifications.services import NotificationService
+
 import io
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
@@ -189,7 +191,7 @@ class RefundRequestViewSet(viewsets.ModelViewSet):
         
         # 🔥 NOTIFICATION FOR APPROVED REFUND (Manual processing)
         try:
-            send_refund_processed_email(refund_request.subscription.user, refund_request)
+            NotificationService.send_refund_processed_email(refund_request.subscription.user, refund_request)
         except Exception as e:
             print(f"Failed to send refund approved notification: {e}")
         
@@ -217,7 +219,7 @@ class RefundRequestViewSet(viewsets.ModelViewSet):
         
         # 🔥 NOTIFICATION FOR REJECTED REFUND
         try:
-            send_refund_rejected_email(refund_request.subscription.user, refund_request)
+            NotificationService.send_refund_rejected_email(refund_request.subscription.user, refund_request)
         except Exception as e:
             print(f"Failed to send refund rejected notification: {e}")
         

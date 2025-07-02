@@ -174,10 +174,10 @@ RAZORPAY_KEY_ID = env('RAZORPAY_KEY_ID')
 RAZORPAY_KEY_SECRET = env('RAZORPAY_KEY_SECRET')
 
 # settings.py - ONLY CHANGE THIS
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.mandrillapp.com'  # Mailchimp Transactional SMTP
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = env('MAILCHIMP_USERNAME')
-EMAIL_HOST_PASSWORD = env('MAILCHIMP_API_KEY')
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.mandrillapp.com'  # Mailchimp Transactional SMTP
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = env('MAILCHIMP_USERNAME')
+# EMAIL_HOST_PASSWORD = env('MAILCHIMP_API_KEY')
+# DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')

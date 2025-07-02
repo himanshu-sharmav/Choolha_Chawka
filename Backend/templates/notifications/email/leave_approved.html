@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leave Request Approved</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .content {
+            padding: 30px 20px;
+        }
+        .leave-details {
+            background-color: #d4edda;
+            padding: 20px;
+            border-radius: 6px;
+            margin: 20px 0;
+            border-left: 4px solid #28a745;
+        }
+        .comment-box {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            border-left: 3px solid #6c757d;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✅ Leave Request Approved</h1>
+        </div>
+        
+        <div class="content">
+            <p>Dear {{ user_name }},</p>
+            
+            <p>Great news! Your leave request has been approved by our team.</p>
+            
+            <div class="leave-details">
+                <h3>📅 Leave Details</h3>
+                <p><strong>Leave Period:</strong> {{ start_date|date:"F d, Y" }} to {{ end_date|date:"F d, Y" }}</p>
+                <p><strong>Duration:</strong> {{ leave_days }} day{{ leave_days|pluralize }}</p>
+            </div>
+            
+            {% if admin_comment %}
+            <div class="comment-box">
+                <h4>💬 Admin Comment:</h4>
+                <p>{{ admin_comment }}</p>
+            </div>
+            {% endif %}
+            
+            <p>✨ Your subscription has been automatically extended to account for the leave period. You won't be charged for the days you're away.</p>
+            
+            <p>Enjoy your time off, and we look forward to serving you when you return!</p>
+        </div>
+        
+        <div class="footer">
+            <p>Best regards,<br><strong>Choolha Chawka Team</strong></p>
+            <p>Questions? Contact us at <a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Payment Failed</title>
+</head>
+<body>
+    <h2>Hi {{ user_name }},</h2>
+    <p>Unfortunately, your payment of ₹{{ amount }} for the <strong>{{ plan_name }}</strong> subscription was not successful.</p>
+    <p>Please try again to activate your subscription:</p>
+    <p><a href="{{ retry_payment_url }}">Retry Payment</a></p>
+    <p>If you need help, contact us at {{ support_email }}.</p>
+    <p>Best regards,<br>Choolha Chawka Team</p>
+</body>
+</html>
