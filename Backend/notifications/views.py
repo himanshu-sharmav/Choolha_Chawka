@@ -6,6 +6,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count
 from .models import NotificationLog
 from .serializers import NotificationLogSerializer
+from django.utils import timezone
 
 class NotificationLogViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for viewing notification history"""
@@ -39,6 +40,7 @@ class NotificationLogViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def by_type(self, request):
         """Get notifications grouped by type"""
+        logs = self.get_queryset()
         type_stats = logs.values('notification_type').annotate(
             count=Count('id')
         ).order_by('-count')

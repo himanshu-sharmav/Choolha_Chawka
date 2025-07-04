@@ -25,13 +25,14 @@ class NotificationService:
             recipient_phone: Override phone (optional)
             channel: 'email', 'sms', or 'both'
         """
+        print(f"🔥 NotificationService called: {template_name} for {user.email}")
         try:
             context_data = context_data or {}
             context_data.update({
                 'user': user,
                 'user_name': user.get_full_name() or user.username,
-                'platform_name': 'Choolha Chawka',
-                'support_email': getattr(settings, 'SUPPORT_EMAIL', 'support@choolhachawka.com'),
+                'platform_name': 'Choolha Chowka',
+                'support_email': getattr(settings, 'SUPPORT_EMAIL', 'support@choolhaChowka.com'),
                 'frontend_url': getattr(settings, 'FRONTEND_URL', 'http://localhost:3000'),
             })
             
@@ -44,6 +45,7 @@ class NotificationService:
             
             # Send Email (HTML-only)
             if channel in ['email', 'both'] and email:
+                print(f"📧 Attempting to send email to {email}")
                 try:
                     # Render subject and HTML template
                     subject = render_to_string(
@@ -68,7 +70,7 @@ class NotificationService:
                     )
                     msg.attach_alternative(html_message, "text/html")
                     msg.send()
-                    
+                    print(f"✅ Email sent successfully to {email}")
                     # Log successful email
                     NotificationLog.objects.create(
                         user=user,
@@ -80,6 +82,7 @@ class NotificationService:
                     )
                     
                 except Exception as e:
+                    print(f"❌ Email failed: {e}")
                     logger.error(f"Email notification failed for {template_name}: {str(e)}")
                     error_message += f"Email failed: {str(e)}; "
                     success = False
@@ -327,6 +330,33 @@ class NotificationService:
         }
         return NotificationService.send_notification(user, 'password_changed', context)
     
+    @staticmethod
+    def send_refund_processed_email(user, refund_request):
+        """Send email when refund is approved/processed"""
+        context = {
+            'refund_request': refund_request,
+            'subscription': refund_request.subscription,
+            'plan_name': refund_request.subscription.plan.name,
+            'refund_amount': refund_request.amount ,  
+            'processed_date': refund_request.processed_at.strftime('%B %d, %Y') if refund_request.processed_at else 'Today',
+            'refund_id': refund_request.id,
+            'admin_comment': refund_request.admin_comment,
+        }
+        return NotificationService.send_notification(user, 'refund_processed', context)
+    
+    @staticmethod
+    def send_refund_rejected_email(user, refund_request):
+        """Send email when refund is rejected"""
+        context = {
+            'refund_request': refund_request,
+            'subscription': refund_request.subscription,
+            'plan_name': refund_request.subscription.plan.name,
+            'refund_amount': refund_request.amount , 
+            'admin_comment': refund_request.admin_comment,
+            'support_email': settings.SUPPORT_EMAIL,
+        }
+        return NotificationService.send_notification(user, 'refund_rejected', context)
+    
     # SMS Auth methods
     @staticmethod
     def send_otp_sms(user, otp):
@@ -414,3 +444,9 @@ def send_login_verification_sms(user, code):
 
 def send_security_alert_sms(user, alert_message):
     return NotificationService.send_security_alert_sms(user, alert_message)
+
+def send_refund_processed_email(user, refund_request):
+    return NotificationService.send_refund_processed_email(user, refund_request)
+
+def send_refund_rejected_email(user, refund_request):
+    return NotificationService.send_refund_rejected_email(user, refund_request)
