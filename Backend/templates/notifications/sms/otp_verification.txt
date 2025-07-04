@@ -1,0 +1,1 @@
+Your Choolha Chowka OTP is: {{ otp }}. Valid for 10 minutes. Do not share with anyone.
