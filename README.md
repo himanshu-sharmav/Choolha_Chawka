@@ -1,4 +1,4 @@
-# Choolha Chawka - Food Subscription Management System
+# Choolha Chowka - Food Subscription Management System
 
 A comprehensive Django-based food subscription platform that enables users to subscribe to meal plans, manage leaves, process payments, and receive automated notifications.
 
@@ -57,8 +57,8 @@ A comprehensive Django-based food subscription platform that enables users to su
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/choolha-chawka.git
-cd choolha-chawka
+git clone https://github.com/yourusername/choolha-Chowka.git
+cd choolha-Chowka
 ```
 
 ### 2. Start with Docker Compose
@@ -79,8 +79,8 @@ docker-compose up -d --build
 
 ### 1. Clone and Setup
 ```bash
-git clone https://github.com/yourusername/choolha-chawka.git
-cd choolha-chawka
+git clone https://github.com/yourusername/choolha-Chowka.git
+cd choolha-Chowka
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
@@ -92,7 +92,7 @@ Create `.env` file:
 # Django Settings
 DEBUG=1
 SECRET_KEY=your-secret-key-here
-DATABASE_URL=postgresql://user:password@localhost:5432/choolha_chawka
+DATABASE_URL=postgresql://user:password@localhost:5432/choolha_Chowka
 
 # AWS SES
 AWS_ACCESS_KEY_ID=your-aws-access-key
@@ -103,7 +103,7 @@ RAZORPAY_KEY_ID=your-razorpay-key
 RAZORPAY_KEY_SECRET=your-razorpay-secret
 
 # Email Settings
-DEFAULT_FROM_EMAIL=noreply@choolhachawka.com
+DEFAULT_FROM_EMAIL=noreply@choolhaChowka.com
 
 # Frontend URL
 FRONTEND_URL=http://localhost:3000
@@ -191,7 +191,7 @@ The system automatically sends notifications for:
 ## 🏗️ Project Structure
 
 ```
-choolha-chawka/Backend/
+choolha-Chowka/Backend/
 ├── accounts/              # User management and authentication
 ├── subscriptions/         # Meal plans and subscription logic
 ├── payments/             # Payment processing and refunds
@@ -260,9 +260,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🆘 Support
 
-- **Documentation**: [Wiki](https://github.com/himanshu-sharmav/choolha-chawka/wiki)
-- **Issues**: [GitHub Issues](https://github.com/himanshu-sharmav/choolha-chawka/issues)
-- **Email**: support@choolhachawka.com
+- **Documentation**: [Wiki](https://github.com/himanshu-sharmav/choolha-Chowka/wiki)
+- **Issues**: [GitHub Issues](https://github.com/himanshu-sharmav/choolha-Chowka/issues)
+- **Email**: support@choolhaChowka.com
 
 ## 🎯 Roadmap
 

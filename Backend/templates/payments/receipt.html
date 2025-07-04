@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Receipt - {{ payment.transaction_id }}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+        .receipt-container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e9ecef;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .company-name {
+            font-size: 28px;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 5px;
+        }
+        .company-tagline {
+            font-size: 14px;
+            color: #6c757d;
+            margin-bottom: 10px;
+        }
+        .receipt-title {
+            font-size: 24px;
+            color: #28a745;
+            margin-top: 15px;
+            font-weight: 600;
+        }
+        .receipt-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        .receipt-left, .receipt-right {
+            flex: 1;
+            min-width: 250px;
+        }
+        .receipt-right {
+            text-align: right;
+        }
+        .info-section {
+            margin-bottom: 25px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 5px;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px 0;
+        }
+        .info-label {
+            font-weight: 500;
+            color: #6c757d;
+        }
+        .info-value {
+            font-weight: 600;
+            color: #495057;
+        }
+        .amount-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #28a745;
+            margin: 20px 0;
+        }
+        .total-amount {
+            font-size: 24px;
+            font-weight: bold;
+            color: #28a745;
+            text-align: center;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status-failed {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+            font-size: 14px;
+            color: #6c757d;
+        }
+        .print-button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 20px 10px;
+            font-size: 14px;
+        }
+        .print-button:hover {
+            background: #0056b3;
+        }
+        @media print {
+            body {
+                background: white;
+                margin: 0;
+                padding: 0;
+            }
+            .receipt-container {
+                box-shadow: none;
+                border: none;
+                padding: 20px;
+            }
+            .print-button {
+                display: none;
+            }
+        }
+        @media (max-width: 600px) {
+            .receipt-info {
+                flex-direction: column;
+            }
+            .receipt-right {
+                text-align: left;
+                margin-top: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="company-name">🍽️ Choolha Chawka</div>
+            <div class="company-tagline">Delicious Home-Style Meals</div>
+            <div class="receipt-title">Payment Receipt</div>
+        </div>
+
+        <!-- Receipt Info -->
+        <div class="receipt-info">
+            <div class="receipt-left">
+                <div class="info-section">
+                    <div class="section-title">Receipt Details</div>
+                    <div class="info-row">
+                        <span class="info-label">Receipt ID:</span>
+                        <span class="info-value">{{ payment.transaction_id }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span class="info-value">{{ payment.created_at|date:"F d, Y" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Time:</span>
+                        <span class="info-value">{{ payment.created_at|time:"g:i A" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Status:</span>
+                        <span class="info-value">
+                            {% if payment.status == 'SUCCESS' %}
+                                <span class="status-badge status-success">{{ payment.status }}</span>
+                            {% else %}
+                                <span class="status-badge status-failed">{{ payment.status }}</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="receipt-right">
+                <div class="info-section">
+                    <div class="section-title">Customer Information</div>
+                    <div class="info-row">
+                        <span class="info-label">Name:</span>
+                        <span class="info-value">{{ user.get_full_name|default:user.username }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Email:</span>
+                        <span class="info-value">{{ user.email }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Phone:</span>
+                        <span class="info-value">{{ user.phone|default:"N/A" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Customer ID:</span>
+                        <span class="info-value">#{{ user.id }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subscription Details -->
+        {% if subscription %}
+        <div class="info-section">
+            <div class="section-title">Subscription Details</div>
+            <div class="info-row">
+                <span class="info-label">Plan:</span>
+                <span class="info-value">{{ plan.name }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Service Type:</span>
+                <span class="info-value">{{ subscription.get_subscription_type_display }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Duration:</span>
+                <span class="info-value">{{ plan.duration_days }} days</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Start Date:</span>
+                <span class="info-value">{{ subscription.start_date|date:"F d, Y" }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">End Date:</span>
+                <span class="info-value">{{ subscription.adjusted_end_date|date:"F d, Y" }}</span>
+            </div>
+            {% if subscription.breakfast_included %}
+            <div class="info-row">
+                <span class="info-label">Breakfast Included:</span>
+                <span class="info-value">Yes</span>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Payment Details -->
+        <div class="info-section">
+            <div class="section-title">Payment Information</div>
+            <div class="info-row">
+                <span class="info-label">Payment Gateway:</span>
+                <span class="info-value">{{ payment.payment_gateway|capfirst }}</span>
+            </div>
+            {% if payment.gateway_order_id %}
+            <div class="info-row">
+                <span class="info-label">Order ID:</span>
+                <span class="info-value">{{ payment.gateway_order_id }}</span>
+            </div>
+            {% endif %}
+            {% if payment.gateway_payment_id %}
+            <div class="info-row">
+                <span class="info-label">Payment ID:</span>
+                <span class="info-value">{{ payment.gateway_payment_id }}</span>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Amount Section -->
+        <div class="amount-section">
+            {% if subscription %}
+            <div class="info-row">
+                <span class="info-label">Base Price:</span>
+                <span class="info-value">₹{{ subscription.base_price }}</span>
+            </div>
+            {% if subscription.breakfast_addon_price > 0 %}
+            <div class="info-row">
+                <span class="info-label">Breakfast Addon:</span>
+                <span class="info-value">₹{{ subscription.breakfast_addon_price }}</span>
+            </div>
+            {% endif %}
+            <hr style="margin: 15px 0; border: 1px solid #dee2e6;">
+            {% endif %}
+            <div class="total-amount">
+                Total Paid: ₹{{ amount_in_rupees }}
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>Thank you for choosing Choolha Chawka!</strong></p>
+            <p>For any queries, contact us at support@choolhachawka.com or call +91-XXXXXXXXXX</p>
+            <p><em>This is a computer-generated receipt and does not require a signature.</em></p>
+            
+            <!-- Print Buttons -->
+            <div style="margin-top: 20px;">
+                <button class="print-button" onclick="window.print()">🖨️ Print Receipt</button>
+                <button class="print-button" onclick="window.close()">✖️ Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-focus for better UX
+        document.addEventListener('DOMContentLoaded', function() {
+            // You can add any JavaScript functionality here
+            console.log('Receipt loaded successfully');
+        });
+    </script>
+</body>
+</html>

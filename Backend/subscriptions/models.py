@@ -34,6 +34,7 @@ class Subscription(models.Model):
         ('CANCELLED', 'Cancelled'),
         ('EXPIRED', 'Expired'),
         ('PENDING_PAYMENT', 'Pending Payment'),
+        ('RENEWED','Renewed')
     ]
     
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='subscriptions')

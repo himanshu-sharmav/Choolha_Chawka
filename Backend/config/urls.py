@@ -28,10 +28,12 @@ urlpatterns = [
     path('api/accounts/', include('accounts.urls')),
     path('api/subscriptions/', include('subscriptions.urls')),
     path('api/payments/', include('payments.urls')),
+    path('api/notifications/', include('notifications.urls')),
+    path('api/feedback/', include('feedback.urls')),
      # Mess owner dashboard APIs
     path('api/owner/', include('owner.urls')),
     # API Documentation (optional, but helpful)
-    # path('api/docs/', include_docs_urls(title='Choolha Chawka API')),
+    # path('api/docs/', include_docs_urls(title='Choolha Chowka API')),
     
     # API Authentication (if using DRF's built-in auth views)
     path('api-auth/', include('rest_framework.urls')),

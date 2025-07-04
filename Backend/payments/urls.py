@@ -7,6 +7,8 @@ router.register('payments', PaymentViewSet, basename='payment')
 router.register('orders', RazorpayOrderViewSet, basename='razorpay-order')
 router.register('refunds', RefundRequestViewSet, basename='refund-request')
 
+
 urlpatterns = [
     path('', include(router.urls)),
+    path('test/', PaymentViewSet.as_view({'get': 'test_page'}), name='payment-test'),
 ]

@@ -11,10 +11,13 @@ from .serializers import (
     PaymentSerializer, RazorpayOrderCreateSerializer, RazorpayOrderSerializer,
     PaymentVerificationSerializer, RefundRequestSerializer
 )
+from django.shortcuts import render
 from .services import razorpay_service
 from subscriptions.models import Subscription
 from django.conf import settings
-from notifications.services import send_refund_processed_email, send_refund_rejected_email
+# from notifications.services import send_refund_processed_email, send_refund_rejected_email
+from notifications.services import NotificationService
+
 import io
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
@@ -34,18 +37,23 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
         """Download payment receipt"""
         payment = self.get_object()
         
+        # Calculate amount in rupees (convert from paise)
+        amount_in_rupees = payment.amount / 100
+        
         # Generate HTML receipt
         html_content = render_to_string('payments/receipt.html', {
             'payment': payment,
             'user': payment.user,
             'subscription': payment.subscription,
             'plan': payment.subscription.plan if payment.subscription else None,
+            'amount_in_rupees': amount_in_rupees,  # Add this
         })
         
         # Return HTML receipt
         response = HttpResponse(html_content, content_type='text/html')
         response['Content-Disposition'] = f'inline; filename="receipt_{payment.transaction_id}.html"'
         return response
+    
     
     @action(detail=True, methods=['get'])
     def receipt_pdf(self, request, pk=None):
@@ -57,7 +65,7 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
         p = canvas.Canvas(buffer, pagesize=letter)
         
         # Add content to PDF
-        p.drawString(100, 750, f"Choolha Chawka - Payment Receipt")
+        p.drawString(100, 750, f"Choolha Chowka - Payment Receipt")
         p.drawString(100, 720, f"Receipt ID: {payment.transaction_id}")
         p.drawString(100, 700, f"Date: {payment.created_at.strftime('%B %d, %Y')}")
         p.drawString(100, 680, f"Customer: {payment.user.get_full_name() or payment.user.username}")
@@ -79,6 +87,11 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
         response = HttpResponse(buffer, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="receipt_{payment.transaction_id}.pdf"'
         return response
+    
+    @action(detail=False, methods=['get'], permission_classes=[])
+    def test_page(self, request):
+        """Render payment test page"""
+        return render(request, 'payments/test_payment.html')
 
 class RazorpayOrderViewSet(viewsets.ModelViewSet):
     """ViewSet for Razorpay order management"""
@@ -189,7 +202,7 @@ class RefundRequestViewSet(viewsets.ModelViewSet):
         
         # 🔥 NOTIFICATION FOR APPROVED REFUND (Manual processing)
         try:
-            send_refund_processed_email(refund_request.subscription.user, refund_request)
+            NotificationService.send_refund_processed_email(refund_request.subscription.user, refund_request)
         except Exception as e:
             print(f"Failed to send refund approved notification: {e}")
         
@@ -217,7 +230,7 @@ class RefundRequestViewSet(viewsets.ModelViewSet):
         
         # 🔥 NOTIFICATION FOR REJECTED REFUND
         try:
-            send_refund_rejected_email(refund_request.subscription.user, refund_request)
+            NotificationService.send_refund_rejected_email(refund_request.subscription.user, refund_request)
         except Exception as e:
             print(f"Failed to send refund rejected notification: {e}")
         
@@ -239,10 +252,15 @@ class RefundRequestViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         refund_request.status = 'PAID'
-        refund_request.refund_transaction_id = request.data.get('transaction_id', f"manual_{timezone.now().timestamp()}")
+        # refund_request.refund_transaction_id = request.data.get('transaction_id', f"manual_{timezone.now().timestamp()}")
         refund_request.admin_comment = request.data.get('admin_comment', 'Manually processed')
         refund_request.save()
         
+         # 🔥 UPDATE SUBSCRIPTION REFUND STATUS
+        if refund_request.subscription:
+            refund_request.subscription.refund_status = 'PAID'
+            refund_request.subscription.save(update_fields=['refund_status'])
+
         return Response({
             'success': True,
             'message': 'Refund marked as paid',
