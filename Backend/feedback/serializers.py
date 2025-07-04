@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.utils import timezone
 from .models import Feedback, FeedbackAttachment
-from accounts.serializers import UserBasicSerializer
+from accounts.serializers import UserProfileSerializer
 from subscriptions.serializers import SubscriptionBasicSerializer
 
 class FeedbackAttachmentSerializer(serializers.ModelSerializer):
@@ -11,9 +11,9 @@ class FeedbackAttachmentSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'original_filename', 'file_size', 'uploaded_at']
 
 class FeedbackSerializer(serializers.ModelSerializer):
-    user = UserBasicSerializer(read_only=True)
+    user = UserProfileSerializer(read_only=True)
     subscription = SubscriptionBasicSerializer(read_only=True)
-    responded_by = UserBasicSerializer(read_only=True)
+    responded_by = UserProfileSerializer(read_only=True)
     attachments = FeedbackAttachmentSerializer(many=True, read_only=True)
     days_since_created = serializers.ReadOnlyField()
     is_food_complaint = serializers.ReadOnlyField()
