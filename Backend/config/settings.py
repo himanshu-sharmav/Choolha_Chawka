@@ -70,7 +70,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'templates')],
+        'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -162,7 +162,6 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
-        'rest_framework.permissions.AllowAny',
     ],
 }
 
@@ -197,7 +196,7 @@ RAZORPAY_KEY_SECRET = env('RAZORPAY_KEY_SECRET')
 # EMAIL_HOST_USER = 'apikey'
 # EMAIL_HOST_PASSWORD = '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'
 
-# Resend Email Config
+#Resend Email Config
 # settings.py - Resend SMTP Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.resend.com'
@@ -205,13 +204,15 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'resend'  # This is literally the string 'resend'
 EMAIL_HOST_PASSWORD = env('RESEND_API_KEY')  # Your Resend API key
-# DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'  # Your verified domain
+DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'  # Your verified domain
 SERVER_EMAIL = 'noreply@choolhachowka.com'
+
+
 
 DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'
 
 # DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'
 EMAIL_USE_LOCALTIME = False
-SUPPORT_EMAIL= 'Choolhachowka@gmail.com'
+SUPPORT_EMAIL= 'himan8953201946@gmail.com'
 
 FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')  # Placeholder URL

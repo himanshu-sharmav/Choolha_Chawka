@@ -14,7 +14,6 @@ from notifications.services import (
     send_subscription_created_email, send_leave_submitted_email,
     send_leave_approved_email, send_leave_rejected_email, send_new_user_joined_email,send_subscription_cancelled_email,send_subscription_renewed_email
 )
-from payments.models import RefundRequest,Payment
 
 class PlanViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for listing and retrieving plans"""
@@ -82,24 +81,6 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         subscription.refund_amount_calculated = refund_amount
         subscription.refund_status = 'PENDING' if refund_amount > 0 else 'NOT_APPLICABLE'
         subscription.save()
-         # 🔥 CREATE REFUND REQUEST IF ELIGIBLE
-        if refund_amount > 0:
-            
-            # Get the original payment for this subscription
-            # original_payment = subscription.refund_request.filter(status='SUCCESS').first()
-            original_payment = Payment.objects.filter(
-            subscription=subscription, 
-            status='SUCCESS'
-        ).first()
-            
-            if original_payment:
-                refund_request = RefundRequest.objects.create(
-                    subscription=subscription,
-                    requested_by=request.user,
-                    original_payment=original_payment,
-                    amount=int(refund_amount ),  # Convert to paise
-                    status='PENDING'
-                )
         
         try:
             send_subscription_cancelled_email(request.user, subscription)
@@ -125,54 +106,40 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             'message': 'No active subscription found'
         }, status=status.HTTP_404_NOT_FOUND)
     
-    
-
     @action(detail=True, methods=['post'])
     def renew(self, request, pk=None):
         """Renew an expired or expiring subscription"""
         old_subscription = self.get_object()
-
+        
         if old_subscription.status not in ['ACTIVE', 'EXPIRED']:
             return Response({
                 'success': False,
                 'message': 'Only active or expired subscriptions can be renewed'
             }, status=status.HTTP_400_BAD_REQUEST)
-
-        # Determine start date for new subscription
-        if old_subscription.status == 'ACTIVE':
-            # Start after current subscription ends
-            new_start_date = old_subscription.adjusted_end_date + timedelta(days=1)
-        else:  # EXPIRED
-            # Start immediately for expired subscriptions
-            new_start_date = timezone.now().date()
-
-        # Calculate total amount (same as old subscription)
-        total_amount = old_subscription.base_price + old_subscription.breakfast_addon_price
-
-        # Create new subscription with all required fields
+        
+        # Create new subscription
         new_subscription = Subscription.objects.create(
             user=old_subscription.user,
             plan=old_subscription.plan,
             breakfast_included=old_subscription.breakfast_included,
-            base_price=old_subscription.base_price,  # Use old subscription's price, not plan's
-            breakfast_addon_price=old_subscription.breakfast_addon_price,  # Use old subscription's addon price
-            total_paid=total_amount,  # ← FIX: Set the required total_paid field
+            base_price=old_subscription.plan.base_price,
+            breakfast_addon_price=old_subscription.plan.breakfast_addon_price if old_subscription.breakfast_included else 0,
             subscription_type=old_subscription.subscription_type,
-            start_date=new_start_date,
-            status='PENDING_PAYMENT'  # Explicitly set status
+            start_date=old_subscription.adjusted_end_date + timedelta(days=1),  # Start after old subscription ends
         )
-
-
+        new_subscription.calculate_total_and_end_date()
+        new_subscription.save()
+        
         # Mark old subscription as renewed
         old_subscription.status = 'RENEWED'
         old_subscription.save()
-
+        
         # Send renewal notification
         try:
             send_subscription_renewed_email(request.user, old_subscription, new_subscription)
         except Exception as e:
             print(f"Failed to send renewal notification: {e}")
-
+        
         return Response({
             'success': True,
             'message': 'Subscription renewed successfully',
@@ -180,7 +147,6 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             'new_subscription_id': new_subscription.id,
             'new_subscription': SubscriptionSerializer(new_subscription).data
         })
-
 
 class LeaveViewSet(viewsets.ModelViewSet):
     """ViewSet for managing leave requests"""

@@ -35,14 +35,6 @@ class SubscriptionCreateSerializer(serializers.ModelSerializer):
         )
         
         return subscription
-    
-class SubscriptionBasicSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Subscription
-        fields = ['id', 'plan', 'breakfast_included', 'base_price', 'breakfast_addon_price',
-                  'total_paid', 'subscription_type', 'start_date', 'base_end_date', 
-                  'adjusted_end_date', 'leave_days', 'status', 'cancelled_at',
-                  'days_remaining', 'is_active', 'created_at']
 
 class SubscriptionSerializer(serializers.ModelSerializer):
     plan = PlanSerializer(read_only=True)

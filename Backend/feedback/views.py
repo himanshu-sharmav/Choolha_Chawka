@@ -13,7 +13,7 @@ from .serializers import (
     FeedbackSerializer, FeedbackCreateSerializer, FeedbackAttachmentSerializer,
     FeedbackResponseSerializer, FeedbackStatusUpdateSerializer
 )
-from notifications.services import NotificationService
+from notifications.services import send_feedback_response_notification
 
 class FeedbackViewSet(viewsets.ModelViewSet):
     """ViewSet for customer feedback management"""
