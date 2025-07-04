@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Choolha Chawka - Payment Test</title>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .plan-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .plan-card:hover {
+            border-color: #007bff;
+            background-color: #f8f9ff;
+        }
+        .plan-card.selected {
+            border-color: #007bff;
+            background-color: #e7f3ff;
+        }
+        .plan-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        .plan-price {
+            font-size: 24px;
+            color: #007bff;
+            margin: 10px 0;
+        }
+        .plan-details {
+            color: #666;
+            font-size: 14px;
+        }
+        .pay-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+        }
+        .pay-button:hover {
+            opacity: 0.9;
+        }
+        .pay-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .checkbox-container {
+            margin: 15px 0;
+        }
+        .checkbox-container input {
+            margin-right: 8px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍽️ Choolha Chawka</h1>
+            <p>Payment Integration Test</p>
+        </div>
+
+        <!-- Plan Selection -->
+        <div id="planSelection">
+            <h3>Select a Plan:</h3>
+            
+            <div class="plan-card" onclick="selectPlan(1, 'Monthly Mess', 3000)">
+                <div class="plan-name">Monthly Mess Plan</div>
+                <div class="plan-price">₹3,000</div>
+                <div class="plan-details">• Lunch & Dinner • 30 Days • Home-style meals</div>
+            </div>
+
+            <div class="plan-card" onclick="selectPlan(2, 'Monthly Tiffin', 2500)">
+                <div class="plan-name">Monthly Tiffin Plan</div>
+                <div class="plan-price">₹2,500</div>
+                <div class="plan-details">• Lunch Only • 30 Days • Office delivery</div>
+            </div>
+
+            <div class="plan-card" onclick="selectPlan(3, 'Weekly Mess', 800)">
+                <div class="plan-name">Weekly Mess Plan</div>
+                <div class="plan-price">₹800</div>
+                <div class="plan-details">• Lunch & Dinner • 7 Days • Trial plan</div>
+            </div>
+
+            <div class="checkbox-container">
+                <label>
+                    <input type="checkbox" id="breakfastIncluded"> 
+                    Add Breakfast (+₹500)
+                </label>
+            </div>
+
+            <button class="pay-button" onclick="createSubscription()" disabled id="payButton">
+                Select a Plan to Continue
+            </button>
+        </div>
+
+        <!-- Status Messages -->
+        <div id="statusMessage" class="status"></div>
+
+        <!-- Debug Info -->
+        <div id="debugInfo" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px; display: none;">
+            <h4>Debug Information:</h4>
+            <pre id="debugContent"></pre>
+        </div>
+    </div>
+
+    <!-- CSRF Token -->
+    {% csrf_token %}
+
+    <script>
+        let selectedPlan = null;
+        let currentSubscription = null;
+
+        // Get CSRF token from Django template
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        // Configuration - Update these with your actual values
+        const API_BASE_URL = 'http://localhost:8000/api';
+        const AUTH_TOKEN = 'a6030fdf2cfeb5a6a3f9775832cbaf27dd9659bf'; // Update this
+
+        function selectPlan(planId, planName, basePrice) {
+            // Remove previous selection
+            document.querySelectorAll('.plan-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // Select current plan
+            event.target.closest('.plan-card').classList.add('selected');
+            
+            selectedPlan = {
+                id: planId,
+                name: planName,
+                basePrice: basePrice
+            };
+
+            // Enable pay button
+            const payButton = document.getElementById('payButton');
+            payButton.disabled = false;
+            payButton.textContent = `Pay ₹${calculateTotal()}`;
+        }
+
+        function calculateTotal() {
+            if (!selectedPlan) return 0;
+            
+            let total = selectedPlan.basePrice;
+            const breakfastIncluded = document.getElementById('breakfastIncluded').checked;
+            
+            if (breakfastIncluded) {
+                total += 500;
+            }
+            
+            return total;
+        }
+
+        // Update total when breakfast checkbox changes
+        document.getElementById('breakfastIncluded').addEventListener('change', function() {
+            if (selectedPlan) {
+                const payButton = document.getElementById('payButton');
+                payButton.textContent = `Pay ₹${calculateTotal()}`;
+            }
+        });
+
+        async function createSubscription() {
+            if (!selectedPlan) {
+                showStatus('Please select a plan', 'error');
+                return;
+            }
+
+            showStatus('Creating subscription...', 'success');
+            
+            try {
+                // Step 1: Create Subscription
+                const subscriptionResponse = await fetch(`${API_BASE_URL}/subscriptions/subscriptions/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Token ${AUTH_TOKEN}`,
+                        'X-CSRFToken': csrftoken  // Add CSRF token
+                    },
+                    credentials: 'same-origin',  // Include cookies
+                    body: JSON.stringify({
+                        plan: selectedPlan.id,
+                        breakfast_included: document.getElementById('breakfastIncluded').checked
+                    })
+                });
+
+                if (!subscriptionResponse.ok) {
+                    const errorData = await subscriptionResponse.json();
+                    throw new Error(errorData.detail || 'Failed to create subscription');
+                }
+
+                const subscriptionData = await subscriptionResponse.json();
+                currentSubscription = subscriptionData.data;
+                
+                showDebug('Subscription Created', subscriptionData);
+
+                // Step 2: Create Razorpay Order
+                const orderResponse = await fetch(`${API_BASE_URL}/payments/orders/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Token ${AUTH_TOKEN}`,
+                        'X-CSRFToken': csrftoken  // Add CSRF token
+                    },
+                    credentials: 'same-origin',  // Include cookies
+                    body: JSON.stringify({
+                        subscription: currentSubscription.id
+                    })
+                });
+
+                if (!orderResponse.ok) {
+                    const errorData = await orderResponse.json();
+                    throw new Error(errorData.error || 'Failed to create payment order');
+                }
+
+                const orderData = await orderResponse.json();
+                showDebug('Order Created', orderData);
+
+                // Step 3: Open Razorpay Checkout
+                openRazorpayCheckout(orderData);
+
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+                console.error('Error:', error);
+            }
+        }
+
+        function openRazorpayCheckout(orderData) {
+            const options = {
+                key: orderData.key,
+                amount: orderData.amount,
+                currency: orderData.currency,
+                order_id: orderData.order_id,
+                name: 'Choolha Chawka',
+                description: `${selectedPlan.name} Subscription`,
+                image: 'https://via.placeholder.com/100x100?text=CC',
+                prefill: {
+                    name: orderData.user.name,
+                    email: orderData.user.email,
+                    contact: orderData.user.phone
+                },
+                theme: {
+                    color: '#667eea'
+                },
+                handler: function(response) {
+                    // Payment successful
+                    showStatus('Payment completed! Verifying...', 'success');
+                    verifyPayment(response);
+                },
+                modal: {
+                    ondismiss: function() {
+                        showStatus('Payment cancelled by user', 'error');
+                    }
+                }
+            };
+
+            const rzp = new Razorpay(options);
+            rzp.open();
+        }
+
+        async function verifyPayment(razorpayResponse) {
+            try {
+                showDebug('Razorpay Response', razorpayResponse);
+
+                const verificationResponse = await fetch(`${API_BASE_URL}/payments/orders/verify_payment/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Token ${AUTH_TOKEN}`,
+                        'X-CSRFToken': csrftoken  // Add CSRF token
+                    },
+                    credentials: 'same-origin',  // Include cookies
+                    body: JSON.stringify({
+                        razorpay_order_id: razorpayResponse.razorpay_order_id,
+                        razorpay_payment_id: razorpayResponse.razorpay_payment_id,
+                        razorpay_signature: razorpayResponse.razorpay_signature
+                    })
+                });
+
+                const verificationData = await verificationResponse.json();
+                showDebug('Verification Response', verificationData);
+
+                if (verificationData.success) {
+                    showStatus('🎉 Payment Successful! Subscription activated.', 'success');
+                    
+                    // Add receipt download button
+                    setTimeout(() => {
+                        const statusDiv = document.getElementById('statusMessage');
+                        statusDiv.innerHTML += `<br><br><button onclick="downloadReceipt(${verificationData.payment_id})" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">Download Receipt</button>`;
+                    }, 1000);
+                } else {
+                    showStatus(`Payment verification failed: ${verificationData.error}`, 'error');
+                }
+
+            } catch (error) {
+                showStatus(`Verification error: ${error.message}`, 'error');
+                console.error('Verification error:', error);
+            }
+        }
+
+        function downloadReceipt(paymentId) {
+            window.open(`${API_BASE_URL}/payments/payments/${paymentId}/receipt/`, '_blank');
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+        }
+
+        function showDebug(title, data) {
+            const debugDiv = document.getElementById('debugInfo');
+            const debugContent = document.getElementById('debugContent');
+            
+            debugContent.textContent += `\n=== ${title} ===\n${JSON.stringify(data, null, 2)}\n`;
+            debugDiv.style.display = 'block';
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if auth token is set
+            if (AUTH_TOKEN === 'your_auth_token_here') {
+                showStatus('⚠️ Please update AUTH_TOKEN in the script', 'error');
+            }
+        });
+    </script>
+</body>
+</html>
