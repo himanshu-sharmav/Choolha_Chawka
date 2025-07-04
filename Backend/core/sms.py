@@ -54,5 +54,5 @@ def send_otp(phone_number, otp):
     Returns:
         dict: Response from send_sms
     """
-    message = f"Your Choolha Chawka verification code is: {otp}. Valid for 15 minutes."
+    message = f"Your Choolha Chowka verification code is: {otp}. Valid for 15 minutes."
     return send_sms(phone_number, message)
