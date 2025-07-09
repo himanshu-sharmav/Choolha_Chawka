@@ -1,46 +1,218 @@
-# Getting Started with Create React App
+# Choolha Chawka Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A modern React TypeScript frontend for the Choolha Chawka food subscription management system.
 
-## Available Scripts
+## 🚀 Features
 
-In the project directory, you can run:
+- **Modern React with TypeScript** - Type-safe development
+- **Responsive Design** - Works on all devices
+- **Dark Theme with Yellow Accents** - Beautiful black and yellow color scheme
+- **Authentication System** - Complete user registration, login, and profile management
+- **Dashboard** - Comprehensive user dashboard with statistics
+- **Real-time Updates** - Live data updates and notifications
+- **API Integration** - Full integration with Django backend
+- **Toast Notifications** - User-friendly feedback system
 
-### `npm start`
+## 🛠️ Tech Stack
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+- **React 18** - Latest React with hooks
+- **TypeScript** - Type safety and better development experience
+- **Tailwind CSS** - Utility-first CSS framework
+- **React Router** - Client-side routing
+- **Axios** - HTTP client for API calls
+- **React Hot Toast** - Beautiful toast notifications
+- **Lucide React** - Beautiful icons
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+## 📋 Prerequisites
 
-### `npm test`
+- Node.js 16+ 
+- npm or yarn
+- Backend API running on `http://localhost:8000`
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## 🚀 Getting Started
 
-### `npm run build`
+### 1. Install Dependencies
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```bash
+cd frontend/choolha_chawka_frontend
+npm install
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### 2. Environment Setup
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Create a `.env` file in the frontend directory:
 
-### `npm run eject`
+```bash
+cp .env.example .env
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+Update the environment variables:
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```env
+REACT_APP_API_URL=http://localhost:8000/api
+REACT_APP_APP_NAME=Choolha Chawka
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+### 3. Start Development Server
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+```bash
+npm start
+```
 
-## Learn More
+The app will be available at `http://localhost:3000`
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## 📁 Project Structure
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+```
+src/
+├── components/          # Reusable UI components
+│   ├── Layout/         # Layout components (Header, Footer)
+│   └── UI/             # Basic UI components (Button, Input, etc.)
+├── context/            # React context providers
+├── pages/              # Page components
+│   ├── Auth/           # Authentication pages
+│   └── Dashboard/      # Dashboard pages
+├── services/           # API service functions
+├── types/              # TypeScript type definitions
+├── App.tsx             # Main app component
+└── index.tsx           # App entry point
+```
+
+## 🎨 Design System
+
+### Colors
+- **Primary**: Yellow (#fbbf24)
+- **Background**: Dark Gray (#111827, #1f2937)
+- **Text**: White (#ffffff) and Gray variants
+- **Accent**: Yellow variants for highlights
+
+### Components
+- **Cards**: Dark background with yellow borders
+- **Buttons**: Yellow primary, outlined secondary
+- **Forms**: Dark inputs with yellow focus states
+- **Navigation**: Dark header with yellow accents
+
+## 🔐 Authentication Flow
+
+1. **Registration** - User creates account with phone verification
+2. **OTP Verification** - SMS-based phone number verification
+3. **Profile Completion** - User selects type and completes profile
+4. **Dashboard Access** - Full access to application features
+
+## 📱 Pages Overview
+
+### Public Pages
+- **Home** - Landing page with features and pricing
+- **Login** - User authentication
+- **Register** - New user registration
+- **OTP Verification** - Phone number verification
+
+### Protected Pages
+- **Dashboard** - Main user dashboard with statistics
+- **Plans** - Available meal plans
+- **Subscriptions** - User's subscription management
+- **Leaves** - Leave request management
+- **Payments** - Payment history and management
+- **Feedback** - Feedback and complaints system
+- **Profile** - User profile management
+
+### Owner Pages (Mess Owners)
+- **Owner Dashboard** - Mess owner analytics
+- **Leave Management** - Approve/reject leave requests
+- **User Management** - View and manage customers
+- **Feedback Management** - Handle customer feedback
+
+## 🔧 API Integration
+
+The frontend integrates with the Django backend through:
+
+- **Authentication API** - Login, register, OTP verification
+- **User Management** - Profile management and updates
+- **Subscription API** - Plan browsing and subscription management
+- **Payment API** - Razorpay integration for payments
+- **Leave API** - Leave request management
+- **Feedback API** - Customer feedback system
+
+## 🚀 Build and Deployment
+
+### Development Build
+```bash
+npm run build
+```
+
+### Production Deployment
+1. Update environment variables for production
+2. Build the application
+3. Deploy to your hosting service (Netlify, Vercel, etc.)
+
+## 🧪 Available Scripts
+
+- `npm start` - Start development server
+- `npm run build` - Build for production
+- `npm test` - Run tests
+- `npm run eject` - Eject from Create React App
+
+## 🎯 Key Features Implementation
+
+### Authentication Context
+- JWT token management
+- Automatic token refresh
+- User state management
+- Protected route handling
+
+### API Service Layer
+- Centralized API calls
+- Request/response interceptors
+- Error handling
+- Token management
+
+### Responsive Design
+- Mobile-first approach
+- Tailwind CSS utilities
+- Flexible grid layouts
+- Touch-friendly interfaces
+
+### User Experience
+- Loading states
+- Error handling
+- Toast notifications
+- Smooth transitions
+
+## 🔒 Security Features
+
+- JWT token storage and management
+- Automatic token refresh
+- Protected routes
+- Input validation
+- XSS protection
+
+## 📊 Performance Optimizations
+
+- Code splitting with React.lazy
+- Optimized bundle size
+- Efficient re-renders
+- Image optimization
+- Caching strategies
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## 📝 License
+
+This project is licensed under the MIT License.
+
+## 🆘 Support
+
+For support and questions:
+- Check the documentation
+- Create an issue on GitHub
+- Contact the development team
+
+---
+
+**Made with ❤️ for the Choolha Chawka community**
