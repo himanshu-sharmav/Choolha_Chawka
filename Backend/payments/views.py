@@ -28,6 +28,8 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsCustomer]
     
     def get_queryset(self):
+        if not self.request.user.is_authenticated:
+            return Payment.objects.none()  # Return an empty queryset if not authenticated
         return Payment.objects.select_related(
             'user', 'subscription', 'subscription__plan'
         ).filter(user=self.request.user)
@@ -171,7 +173,10 @@ class RefundRequestViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        if self.request.user.user_type == 'mess_owner':
+        user = self.request.user
+        user_type = getattr(user, 'user_type', None) if user.is_authenticated else None
+
+        if user_type == 'mess_owner':
             # Mess owners can see all refund requests
             return RefundRequest.objects.select_related(
                 'subscription', 'subscription__plan', 'subscription__user', 
@@ -181,7 +186,8 @@ class RefundRequestViewSet(viewsets.ModelViewSet):
             # Customers see only their own refund requests
             return RefundRequest.objects.select_related(
                 'subscription', 'subscription__plan', 'requested_by', 'original_payment'
-            ).filter(requested_by=self.request.user)
+            ).filter(requested_by=user)
+
     
     @action(detail=True, methods=['post'], permission_classes=[IsMessOwner])
     def approve(self, request, pk=None):

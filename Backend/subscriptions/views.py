@@ -35,6 +35,8 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCustomer]  # Only customers can create subscriptions
     
     def get_queryset(self):
+        if not self.request.user.is_authenticated:
+            return Subscription.objects.none()  # Return an empty queryset if not authenticated
         return Subscription.objects.select_related(
             'plan', 'user'
         ).filter(user=self.request.user)
@@ -187,48 +189,54 @@ class LeaveViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
+        if not self.request.user.is_authenticated:
+            return Leave.objects.none()  # Return an empty queryset if not authenticated
         if self.request.user.user_type == 'mess_owner':
-            # Mess owners can see all leaves with proper joins
             return Leave.objects.select_related(
                 'subscription', 'subscription__user', 'subscription__plan', 'reviewed_by'
             ).all()
         else:
-            # Regular users see only their own leaves
             return Leave.objects.select_related(
                 'subscription', 'subscription__plan', 'reviewed_by'
             ).filter(subscription__user=self.request.user)
     
     def get_serializer_class(self):
+        user = self.request.user
+        user_type = getattr(user, 'user_type', None) if user.is_authenticated else None
+
         if self.action == 'create':
             return LeaveCreateSerializer
-        elif self.request.user.user_type == 'mess_owner' and self.action == 'list':
+        elif user_type == 'mess_owner' and self.action == 'list':
             return LeaveAdminSerializer
         return LeaveSerializer
+
     
     def create(self, request, *args, **kwargs):
-        # Only customers can create leave requests
-        if request.user.user_type not in ['student', 'regular']:
-            return Response({
-                'success': False,
-                'message': 'Only customers can create leave requests'
-            }, status=status.HTTP_403_FORBIDDEN)
-            
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        leave = serializer.save()
-        
-        try:
-            send_leave_submitted_email(request.user, leave)
-        except Exception as e:
-            print(f"Failed to send leave submitted email: {e}")
-
-        return Response({
-            'success': True,
-            'message': f'Leave request submitted for {leave.duration_days} days. Awaiting admin approval.',
-            'status': leave.status,
-            'leave_id': leave.id
-        }, status=status.HTTP_201_CREATED)
+     user_type = getattr(request.user, 'user_type', None) if request.user.is_authenticated else None
     
+     # Only customers can create leave requests
+     if user_type not in ['student', 'regular']:
+         return Response({
+             'success': False,
+             'message': 'Only customers can create leave requests'
+         }, status=status.HTTP_403_FORBIDDEN)
+         
+     serializer = self.get_serializer(data=request.data)
+     serializer.is_valid(raise_exception=True)
+     leave = serializer.save()
+     
+     try:
+         send_leave_submitted_email(request.user, leave)
+     except Exception as e:
+         print(f"Failed to send leave submitted email: {e}")
+    
+     return Response({
+         'success': True,
+         'message': f'Leave request submitted for {leave.duration_days} days. Awaiting admin approval.',
+         'status': leave.status,
+         'leave_id': leave.id
+     }, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=['post'], permission_classes=[IsMessOwner])
     def approve(self, request, pk=None):
         """Approve leave request (Mess Owner only)"""

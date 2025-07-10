@@ -26,9 +26,17 @@ class FeedbackViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        return Feedback.objects.select_related(
-            'user', 'subscription', 'subscription__plan', 'responded_by'
-        ).prefetch_related('attachments').filter(user=self.request.user)
+        # Prevent schema generation (drf_yasg) from triggering logic that needs auth
+        if getattr(self, 'swagger_fake_view', False):
+            return Feedback.objects.none()
+    
+        if self.request.user.is_authenticated:
+            return Feedback.objects.select_related(
+                'user', 'subscription', 'subscription__plan', 'responded_by'
+            ).prefetch_related('attachments').filter(user=self.request.user)
+    
+        return Feedback.objects.none()
+
     
     def get_serializer_class(self):
         if self.action == 'create':

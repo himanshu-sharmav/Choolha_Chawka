@@ -21,6 +21,7 @@ from django.conf.urls.static import static
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+from django.http import HttpResponse
 
 schema_view = get_schema_view(
    openapi.Info(
@@ -37,6 +38,7 @@ schema_view = get_schema_view(
 
 
 urlpatterns = [
+     path('', lambda request: HttpResponse("My API is running!", status=200)),
     # Django Admin
     path('admin/', admin.site.urls),
     
