@@ -8,7 +8,8 @@ from core.permissions import IsMessOwner, IsCustomer
 from .models import Plan, Subscription, Leave
 from .serializers import (
     PlanSerializer, SubscriptionSerializer, SubscriptionCreateSerializer,
-    LeaveSerializer, LeaveCreateSerializer, LeaveAdminSerializer
+    LeaveSerializer, LeaveCreateSerializer, LeaveAdminSerializer,
+    PlanCreateUpdateSerializer
 )
 from notifications.services import (
     send_subscription_created_email, send_leave_submitted_email,
@@ -16,18 +17,27 @@ from notifications.services import (
 )
 from payments.models import RefundRequest,Payment
 
-class PlanViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet for listing and retrieving plans"""
-    queryset = Plan.objects.filter(is_active=True)
-    serializer_class = PlanSerializer
+class PlanViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing plans"""
+    queryset = Plan.objects.all()
     permission_classes = [IsAuthenticated]
-    
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        service_type = self.request.query_params.get('service_type', None)
-        if service_type:
-            queryset = queryset.filter(service_type=service_type)
-        return queryset
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'partial_update']:  # Change to 'partial_update'
+            return PlanCreateUpdateSerializer
+        return PlanSerializer
+
+    def partial_update(self, request, *args, **kwargs):  # Change method name to partial_update
+        plan = self.get_object()
+        serializer = self.get_serializer(plan, data=request.data, partial=True)  # Allow partial updates
+        serializer.is_valid(raise_exception=True)
+        plan = serializer.save()
+        return Response(PlanSerializer(plan).data)
+
+    def destroy(self, request, *args, **kwargs):
+        plan = self.get_object()
+        plan.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 class SubscriptionViewSet(viewsets.ModelViewSet):
     """ViewSet for managing user subscriptions"""

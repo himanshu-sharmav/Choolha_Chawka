@@ -152,3 +152,10 @@ class LeaveAdminSerializer(serializers.ModelSerializer):
     
     def get_user_phone(self, obj):
         return obj.subscription.user.phone
+
+class PlanCreateUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Plan
+        fields = ['code', 'name', 'description', 'service_type', 'base_price', 
+                  'included_meals', 'can_add_breakfast', 'breakfast_addon_price', 
+                  'duration_days', 'is_active']

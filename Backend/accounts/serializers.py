@@ -54,7 +54,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = ('id', 'username', 'email', 'phone', 'user_type', 
                   'is_tiffin_user', 'is_mess_user', 'preferred_delivery_time', 
-                  'status', 'student_profile', 'regular_profile', 'mess_owner_profile')
+                  'status', 'student_profile', 'regular_profile', 'mess_owner_profile','phone_verified')
         read_only_fields = ('id', 'username', 'email', 'phone', 'status')
 
 

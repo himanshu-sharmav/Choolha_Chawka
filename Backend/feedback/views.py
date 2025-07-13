@@ -18,7 +18,7 @@ from notifications.services import NotificationService
 class FeedbackViewSet(viewsets.ModelViewSet):
     """ViewSet for customer feedback management"""
     serializer_class = FeedbackSerializer
-    permission_classes = [IsCustomer]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
     filterset_fields = ['feedback_type', 'status', 'priority']
     search_fields = ['subject', 'message']
@@ -113,6 +113,18 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         }
         
         return Response(stats)
+
+    def partial_update(self, request, *args, **kwargs):  # Add this method
+        feedback = self.get_object()
+        serializer = self.get_serializer(feedback, data=request.data, partial=True)  # Allow partial updates
+        serializer.is_valid(raise_exception=True)
+        feedback = serializer.save()
+        return Response(FeedbackSerializer(feedback).data)
+
+    def destroy(self, request, *args, **kwargs):
+        feedback = self.get_object()
+        feedback.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 class AdminFeedbackViewSet(viewsets.ModelViewSet):
     """ViewSet for admin feedback management"""

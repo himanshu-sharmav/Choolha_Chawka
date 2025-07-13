@@ -24,6 +24,10 @@ from .serializers import (
     PasswordResetConfirmSerializer,
     ChangePasswordSerializer
 )
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+# from .models import UserProfile  # Assuming you have a UserProfile model
+from .serializers import UserProfileSerializer  # Create this serializer
 
 User = get_user_model()
 
@@ -94,14 +98,19 @@ class VerifyOTPView(APIView):
             attempt.save()
             
             if is_valid:
-                # Create auth token
-                # token, created = Token.objects.get_or_create(user=user)
-                 # Create JWT tokens
+                # Check if the phone is verified
+                if not user.phone_verified:
+                    return Response({
+                        'success': False,
+                        'message': 'Phone number not verified. Please verify your phone number to log in.'
+                    }, status=status.HTTP_403_FORBIDDEN)
+
+                # Create JWT tokens
                 refresh = RefreshToken.for_user(user)
                 access_token = str(refresh.access_token)
                 refresh_token = str(refresh)
-                
-                 # Send welcome email for first-time phone verification
+
+                # Send welcome email for first-time phone verification
                 if user.status in ['registration_complete', 'profile_complete']:
                     try:
                         send_welcome_email(user)
@@ -190,8 +199,19 @@ class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        serializer = UserProfileSerializer(request.user)
+        serializer = UserProfileSerializer(request.user)  # Use the existing UserProfileSerializer
         return Response(serializer.data)
+
+    def put(self, request):
+        serializer = UserProfileSerializer(request.user, data=request.data, partial=True)  # Allow partial updates
+        serializer.is_valid(raise_exception=True)
+        serializer.save()  # Save the updated user data
+        return Response(serializer.data)
+
+    def delete(self, request):
+        user = request.user
+        user.delete()  # Delete the user account
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class CompleteProfileView(APIView):
@@ -389,3 +409,29 @@ class ChangePasswordView(APIView):
             'success': True,
             'message': 'Password changed successfully'
         })
+
+# class UserProfileViewSet(viewsets.ModelViewSet):
+#     """ViewSet for managing user profiles"""
+#     serializer_class = UserProfileSerializer
+#     permission_classes = [IsAuthenticated]
+
+#     def get_queryset(self):
+#         return UserProfile.objects.filter(user=self.request.user)
+
+#     def create(self, request, *args, **kwargs):
+#         serializer = self.get_serializer(data=request.data)
+#         serializer.is_valid(raise_exception=True)
+#         profile = serializer.save(user=request.user)
+#         return Response(UserProfileSerializer(profile).data, status=status.HTTP_201_CREATED)
+
+#     def update(self, request, *args, **kwargs):
+#         profile = self.get_object()
+#         serializer = self.get_serializer(profile, data=request.data)
+#         serializer.is_valid(raise_exception=True)
+#         profile = serializer.save()
+#         return Response(UserProfileSerializer(profile).data)
+
+#     def destroy(self, request, *args, **kwargs):
+#         profile = self.get_object()
+#         profile.delete()
+#         return Response(status=status.HTTP_204_NO_CONTENT)
