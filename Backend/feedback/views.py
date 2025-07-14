@@ -11,13 +11,13 @@ from core.permissions import IsCustomer, IsMessOwner
 from .models import Feedback, FeedbackAttachment
 from .serializers import (
     FeedbackSerializer, FeedbackCreateSerializer, FeedbackAttachmentSerializer,
-    FeedbackResponseSerializer, FeedbackStatusUpdateSerializer
+    FeedbackResponseSerializer, FeedbackStatusUpdateSerializer,
+    FeedbackUpdateSerializer, FeedbackAdminSerializer
 )
 from notifications.services import NotificationService
 
 class FeedbackViewSet(viewsets.ModelViewSet):
-    """ViewSet for customer feedback management"""
-    serializer_class = FeedbackSerializer
+    """Complete CRUD operations for customer feedback management"""
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
     filterset_fields = ['feedback_type', 'status', 'priority']
@@ -29,33 +29,110 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         # Prevent schema generation (drf_yasg) from triggering logic that needs auth
         if getattr(self, 'swagger_fake_view', False):
             return Feedback.objects.none()
-    
-        if self.request.user.is_authenticated:
+        
+        user = self.request.user
+        user_type = getattr(user, 'user_type', None) if user.is_authenticated else None
+        
+        if user_type == 'mess_owner':
             return Feedback.objects.select_related(
                 'user', 'subscription', 'subscription__plan', 'responded_by'
-            ).prefetch_related('attachments').filter(user=self.request.user)
-    
-        return Feedback.objects.none()
+            ).prefetch_related('attachments').all()
+        elif user.is_authenticated:
+            return Feedback.objects.select_related(
+                'subscription', 'subscription__plan', 'responded_by'
+            ).prefetch_related('attachments').filter(user=user)
+        else:
+            return Feedback.objects.none()
 
-    
     def get_serializer_class(self):
         if self.action == 'create':
             return FeedbackCreateSerializer
-        return FeedbackSerializer
+        elif self.action in ['update', 'partial_update']:
+            return FeedbackUpdateSerializer
+        else:
+            user_type = getattr(self.request.user, 'user_type', None) if self.request.user.is_authenticated else None
+            if user_type == 'mess_owner':
+                return FeedbackAdminSerializer
+            return FeedbackSerializer
     
-    def perform_create(self, serializer):
-        # Just save the feedback - NO EMAIL NOTIFICATIONS
-        # Dashboard will show new feedback automatically
-        feedback = serializer.save(user=self.request.user)
+    def create(self, request, *args, **kwargs):
+        """Create new feedback"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Set the user to the current user
+        feedback = serializer.save(user=request.user)
+        
+        return Response({
+            'success': True,
+            'message': 'Feedback submitted successfully',
+            'feedback_id': feedback.id,
+            'data': FeedbackSerializer(feedback).data
+        }, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        """Update feedback (full update)"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        user_type = getattr(request.user, 'user_type', None) if request.user.is_authenticated else None
+        
+        # Only mess_owner can update feedback or users can update their own pending feedback
+        if user_type != 'mess_owner' and (instance.user != request.user or instance.status != 'open'):
+            return Response({
+                'success': False,
+                'message': 'You can only update your own pending feedback'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        feedback = serializer.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Feedback updated successfully',
+            'data': FeedbackSerializer(feedback).data
+        })
+
+    def partial_update(self, request, *args, **kwargs):
+        """Partial update feedback"""
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        """Delete feedback"""
+        instance = self.get_object()
+        user_type = getattr(request.user, 'user_type', None) if request.user.is_authenticated else None
+        
+        # Only mess_owner can delete feedback or users can delete their own pending feedback
+        if user_type != 'mess_owner' and (instance.user != request.user or instance.status != 'open'):
+            return Response({
+                'success': False,
+                'message': 'You can only delete your own pending feedback'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        instance.delete()
+        return Response({
+            'success': True,
+            'message': 'Feedback deleted successfully'
+        }, status=status.HTTP_204_NO_CONTENT)
     
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def add_attachment(self, request, pk=None):
         """Add attachment to feedback"""
         feedback = self.get_object()
         
+        # Only allow attachment to own feedback or if mess_owner
+        user_type = getattr(request.user, 'user_type', None) if request.user.is_authenticated else None
+        if user_type != 'mess_owner' and feedback.user != request.user:
+            return Response({
+                'success': False,
+                'message': 'You can only add attachments to your own feedback'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
         if 'file' not in request.FILES:
             return Response({
-                'error': 'No file provided'
+                'success': False,
+                'message': 'No file provided'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         file = request.FILES['file']
@@ -63,14 +140,16 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         # Validate file size (5MB limit)
         if file.size > 5 * 1024 * 1024:
             return Response({
-                'error': 'File size must be less than 5MB'
+                'success': False,
+                'message': 'File size must be less than 5MB'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Validate file type
         allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'text/plain']
         if file.content_type not in allowed_types:
             return Response({
-                'error': 'File type not allowed. Only images, PDF, and text files are allowed.'
+                'success': False,
+                'message': 'File type not allowed. Only images, PDF, and text files are allowed.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         attachment = FeedbackAttachment.objects.create(
@@ -78,8 +157,11 @@ class FeedbackViewSet(viewsets.ModelViewSet):
             file=file
         )
         
-        serializer = FeedbackAttachmentSerializer(attachment)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response({
+            'success': True,
+            'message': 'Attachment added successfully',
+            'data': FeedbackAttachmentSerializer(attachment).data
+        }, status=status.HTTP_201_CREATED)
     
     @action(detail=True, methods=['delete'])
     def remove_attachment(self, request, pk=None):
@@ -87,13 +169,31 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         feedback = self.get_object()
         attachment_id = request.data.get('attachment_id')
         
+        # Only allow removal from own feedback or if mess_owner
+        user_type = getattr(request.user, 'user_type', None) if request.user.is_authenticated else None
+        if user_type != 'mess_owner' and feedback.user != request.user:
+            return Response({
+                'success': False,
+                'message': 'You can only remove attachments from your own feedback'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        if not attachment_id:
+            return Response({
+                'success': False,
+                'message': 'Attachment ID is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         try:
             attachment = feedback.attachments.get(id=attachment_id)
             attachment.delete()
-            return Response({'success': True, 'message': 'Attachment removed'})
+            return Response({
+                'success': True, 
+                'message': 'Attachment removed successfully'
+            })
         except FeedbackAttachment.DoesNotExist:
             return Response({
-                'error': 'Attachment not found'
+                'success': False,
+                'message': 'Attachment not found'
             }, status=status.HTTP_404_NOT_FOUND)
     
     @action(detail=False, methods=['get'])
@@ -114,21 +214,41 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         
         return Response(stats)
 
-    def partial_update(self, request, *args, **kwargs):  # Add this method
+    @action(detail=True, methods=['post'])
+    def respond(self, request, pk=None):
+        """Respond to feedback (mess_owner only)"""
+        user_type = getattr(request.user, 'user_type', None) if request.user.is_authenticated else None
+        
+        if user_type != 'mess_owner':
+            return Response({
+                'success': False,
+                'message': 'Only mess owners can respond to feedback'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
         feedback = self.get_object()
-        serializer = self.get_serializer(feedback, data=request.data, partial=True)  # Allow partial updates
-        serializer.is_valid(raise_exception=True)
-        feedback = serializer.save()
-        return Response(FeedbackSerializer(feedback).data)
-
-    def destroy(self, request, *args, **kwargs):
-        feedback = self.get_object()
-        feedback.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        response_message = request.data.get('admin_response')
+        
+        if not response_message:
+            return Response({
+                'success': False,
+                'message': 'Response message is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        feedback.admin_response = response_message
+        feedback.status = 'in_progress'
+        feedback.responded_by = request.user
+        feedback.responded_at = timezone.now()
+        feedback.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Response added successfully',
+            'data': FeedbackSerializer(feedback).data
+        })
 
 class AdminFeedbackViewSet(viewsets.ModelViewSet):
-    """ViewSet for admin feedback management"""
-    serializer_class = FeedbackSerializer
+    """ViewSet for admin feedback management with enhanced features"""
+    serializer_class = FeedbackAdminSerializer
     permission_classes = [IsMessOwner]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
     filterset_fields = ['feedback_type', 'status', 'priority', 'user']
@@ -137,9 +257,55 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
     ordering = ['-priority', '-created_at']
     
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Feedback.objects.none()
+            
         return Feedback.objects.select_related(
             'user', 'subscription', 'subscription__plan', 'responded_by'
         ).prefetch_related('attachments').all()
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return FeedbackCreateSerializer
+        elif self.action in ['update', 'partial_update']:
+            return FeedbackUpdateSerializer
+        return FeedbackAdminSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Create feedback on behalf of user (admin only)"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        feedback = serializer.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Feedback created successfully',
+            'feedback_id': feedback.id,
+            'data': FeedbackAdminSerializer(feedback).data
+        }, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        """Update any feedback (admin only)"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        feedback = serializer.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Feedback updated successfully',
+            'data': FeedbackAdminSerializer(feedback).data
+        })
+
+    def destroy(self, request, *args, **kwargs):
+        """Delete any feedback (admin only)"""
+        instance = self.get_object()
+        instance.delete()
+        return Response({
+            'success': True,
+            'message': 'Feedback deleted successfully'
+        }, status=status.HTTP_204_NO_CONTENT)
     
     @action(detail=True, methods=['post'])
     def respond(self, request, pk=None):
@@ -154,16 +320,13 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
             feedback.status = 'in_progress'
             feedback.save()
             
-            # NO EMAIL NOTIFICATION - User will see response in dashboard
-            
             return Response({
                 'success': True,
                 'message': 'Response sent successfully',
-                'feedback': FeedbackSerializer(feedback).data
+                'feedback': FeedbackAdminSerializer(feedback).data
             })
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
     
     @action(detail=True, methods=['patch'])
     def update_status(self, request, pk=None):
@@ -178,10 +341,36 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
             return Response({
                 'success': True,
                 'message': 'Status updated successfully',
-                'feedback': FeedbackSerializer(feedback).data
+                'feedback': FeedbackAdminSerializer(feedback).data
             })
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def mark_resolved(self, request, pk=None):
+        """Mark feedback as resolved"""
+        feedback = self.get_object()
+        feedback.status = 'resolved'
+        feedback.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Feedback marked as resolved',
+            'status': feedback.status
+        })
+
+    @action(detail=True, methods=['post'])
+    def mark_urgent(self, request, pk=None):
+        """Mark feedback as urgent priority"""
+        feedback = self.get_object()
+        feedback.priority = 'urgent'
+        feedback.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Feedback marked as urgent',
+            'priority': feedback.priority
+        })
     
     @action(detail=False, methods=['get'])
     def dashboard_stats(self, request):
