@@ -52,9 +52,9 @@ venv.bak/
 Thumbs.db
 
 # Static files (if collected)
-staticfiles/
-static_collected/
-media/
+# staticfiles/
+# static_collected/
+# media/
 
 # Coverage reports
 htmlcov/
