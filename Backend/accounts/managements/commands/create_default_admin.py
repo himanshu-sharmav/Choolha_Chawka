@@ -12,7 +12,7 @@ class Command(BaseCommand):
             User.objects.create_superuser(
                 username='admin',
                 email='himanshusharma.dev80.com',
-                password=os.environ.get('ADMIN_PASSWORD', 'defaultpassword123'),
+                password='defaultpassword123',
                 user_type='student'
             )
             self.stdout.write(
