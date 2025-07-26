@@ -97,9 +97,25 @@ AUTH_USER_MODEL = 'accounts.User'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 
-DATABASES = {
-    'default': dj_database_url.parse(os.environ.get('DATABASE_URL'))
-}
+# Database Configuration - Environment-based
+if env('DATABASE_URL', default=None):
+    # Production/Deployed - use environment DATABASE_URL
+    DATABASES = {
+        'default': dj_database_url.parse(env('DATABASE_URL'))
+    }
+else:
+    # Local development - use local PostgreSQL
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': env('DB_NAME', default='ChoolaChawka_dev'),
+            'USER': env('DB_USER', default='postgres'),
+            'PASSWORD': env('DB_PASSWORD', default='Himan123@'),
+            'HOST': env('DB_HOST', default='localhost'),
+            'PORT': env('DB_PORT', default='5432'),
+        }
+    }
+
 # if 'RDS_DB_NAME' in os.environ:
 #     DATABASES = {
 #         'default': {
