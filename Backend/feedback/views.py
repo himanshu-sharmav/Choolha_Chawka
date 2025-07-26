@@ -48,6 +48,21 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         # Dashboard will show new feedback automatically
         feedback = serializer.save(user=self.request.user)
     
+    def create(self, request, *args, **kwargs):
+        """Override create to return full feedback object with ID"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        feedback = serializer.save(user=request.user)
+        
+        # Return full feedback object including ID
+        response_serializer = FeedbackSerializer(feedback)
+        return Response({
+            'success': True,
+            'message': 'Feedback created successfully',
+            'data': response_serializer.data
+        }, status=status.HTTP_201_CREATED)
+
+
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def add_attachment(self, request, pk=None):
         """Add attachment to feedback"""
