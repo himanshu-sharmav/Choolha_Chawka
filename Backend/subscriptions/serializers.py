@@ -46,6 +46,14 @@ class SubscriptionBasicSerializer(serializers.ModelSerializer):
                   'adjusted_end_date', 'leave_days', 'status', 'cancelled_at',
                   'days_remaining', 'created_at']
 
+    def get_days_remaining(self, obj):
+        if obj.status != 'ACTIVE':
+            return 0
+        today = timezone.now().date()
+        if today >= obj.adjusted_end_date:
+            return 0
+        return (obj.adjusted_end_date - today).days              
+
 class SubscriptionSerializer(serializers.ModelSerializer):
     plan = PlanSerializer(read_only=True)
     days_remaining = serializers.SerializerMethodField()
