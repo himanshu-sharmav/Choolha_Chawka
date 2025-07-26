@@ -9,6 +9,35 @@ from .models import NotificationLog
 
 logger = logging.getLogger(__name__)
 
+# Try to import Celery tasks; fall back to sync mode in unit tests
+try:
+    from notifications.tasks import (
+        async_send_welcome_email,
+        async_send_profile_complete_email,
+        async_send_subscription_created_email,
+        async_send_payment_success_email,
+        async_send_payment_failed_email,
+        async_send_leave_submitted_email,
+        async_send_leave_approved_email,
+        async_send_leave_rejected_email,
+        async_send_subscription_cancelled_email,
+        async_send_subscription_expiring_email,
+        async_send_subscription_expired_email,
+        async_send_subscription_renewed_email,
+        async_send_refund_processed_email,
+        async_send_refund_rejected_email,
+        async_send_password_reset_email,
+        async_send_password_changed_email,
+        async_send_new_user_joined_email,
+        async_send_payment_reminder_email,
+        async_send_otp_sms,
+        async_send_password_reset_otp_sms,
+        async_send_login_verification_sms,
+        async_send_security_alert_sms,
+    )
+    _ASYNC = True
+except Exception:  # Celery not running, tests, etc.
+    _ASYNC = False
 
 class NotificationService:
     
@@ -135,7 +164,7 @@ class NotificationService:
             logger.error(f"Notification service error for {template_name}: {str(e)}")
             return False, str(e)
     
-    # Specific notification methods
+    # Specific notification methods (unchanged - these are used by Celery tasks)
     @staticmethod
     def send_welcome_email(user):
         """Send welcome email when user first registers"""
@@ -337,7 +366,7 @@ class NotificationService:
             'refund_request': refund_request,
             'subscription': refund_request.subscription,
             'plan_name': refund_request.subscription.plan.name,
-            'refund_amount': refund_request.amount ,  
+            'refund_amount': refund_request.amount,  
             'processed_date': refund_request.processed_at.strftime('%B %d, %Y') if refund_request.processed_at else 'Today',
             'refund_id': refund_request.id,
             'admin_comment': refund_request.admin_comment,
@@ -351,7 +380,7 @@ class NotificationService:
             'refund_request': refund_request,
             'subscription': refund_request.subscription,
             'plan_name': refund_request.subscription.plan.name,
-            'refund_amount': refund_request.amount , 
+            'refund_amount': refund_request.amount, 
             'admin_comment': refund_request.admin_comment,
             'support_email': settings.SUPPORT_EMAIL,
         }
@@ -383,70 +412,137 @@ class NotificationService:
         return NotificationService.send_notification(user, 'security_alert', context, channel='sms')
 
 
-# Convenience functions for backward compatibility
+# Convenience functions with Celery async support
 def send_welcome_email(user):
+    if _ASYNC:
+        async_send_welcome_email.delay(user.id)
+        return True, ""
     return NotificationService.send_welcome_email(user)
 
 def send_profile_complete_email(user):
+    if _ASYNC:
+        async_send_profile_complete_email.delay(user.id)
+        return True, ""
     return NotificationService.send_profile_complete_email(user)
 
 def send_subscription_created_email(user, subscription):
+    if _ASYNC:
+        async_send_subscription_created_email.delay(user.id, subscription.id)
+        return True, ""
     return NotificationService.send_subscription_created_email(user, subscription)
 
 def send_payment_success_email(user, subscription, payment):
+    if _ASYNC:
+        async_send_payment_success_email.delay(user.id, subscription.id, payment.id)
+        return True, ""
     return NotificationService.send_payment_success_email(user, subscription, payment)
 
 def send_payment_failed_email(user, subscription, order):
+    if _ASYNC:
+        async_send_payment_failed_email.delay(user.id, subscription.id, order.id)
+        return True, ""
     return NotificationService.send_payment_failed_email(user, subscription, order)
 
 def send_leave_submitted_email(user, leave):
+    if _ASYNC:
+        async_send_leave_submitted_email.delay(user.id, leave.id)
+        return True, ""
     return NotificationService.send_leave_submitted_email(user, leave)
 
 def send_leave_approved_email(user, leave):
+    if _ASYNC:
+        async_send_leave_approved_email.delay(user.id, leave.id)
+        return True, ""
     return NotificationService.send_leave_approved_email(user, leave)
 
 def send_leave_rejected_email(user, leave):
+    if _ASYNC:
+        async_send_leave_rejected_email.delay(user.id, leave.id)
+        return True, ""
     return NotificationService.send_leave_rejected_email(user, leave)
 
 def send_new_user_joined_email(mess_owners, user, subscription):
+    if _ASYNC:
+        mess_owner_ids = [owner.id for owner in mess_owners]
+        async_send_new_user_joined_email.delay(mess_owner_ids, user.id, subscription.id)
+        return True, ""
     return NotificationService.send_new_user_joined_email(mess_owners, user, subscription)
 
 def send_subscription_cancelled_email(user, subscription):
+    if _ASYNC:
+        async_send_subscription_cancelled_email.delay(user.id, subscription.id)
+        return True, ""
     return NotificationService.send_subscription_cancelled_email(user, subscription)
 
 def send_subscription_expiring_email(user, subscription):
+    if _ASYNC:
+        async_send_subscription_expiring_email.delay(user.id, subscription.id)
+        return True, ""
     return NotificationService.send_subscription_expiring_email(user, subscription)
 
 def send_subscription_expired_email(user, subscription):
+    if _ASYNC:
+        async_send_subscription_expired_email.delay(user.id, subscription.id)
+        return True, ""
     return NotificationService.send_subscription_expired_email(user, subscription)
 
 def send_subscription_renewed_email(user, old_subscription, new_subscription):
+    if _ASYNC:
+        async_send_subscription_renewed_email.delay(user.id, old_subscription.id, new_subscription.id)
+        return True, ""
     return NotificationService.send_subscription_renewed_email(user, old_subscription, new_subscription)
 
 def send_payment_reminder_email(user, subscription):
+    if _ASYNC:
+        async_send_payment_reminder_email.delay(user.id, subscription.id)
+        return True, ""
     return NotificationService.send_payment_reminder_email(user, subscription)
 
 def send_password_reset_email(user, uidb64, token):
+    if _ASYNC:
+        async_send_password_reset_email.delay(user.id, uidb64, token)
+        return True, ""
     return NotificationService.send_password_reset_email(user, uidb64, token)
 
 def send_password_changed_email(user):
+    if _ASYNC:
+        async_send_password_changed_email.delay(user.id)
+        return True, ""
     return NotificationService.send_password_changed_email(user)
 
-# SMS Auth convenience functions
-def send_otp_sms(user, otp):
-    return NotificationService.send_otp_sms(user, otp)
-
-def send_password_reset_otp_sms(user, otp):
-    return NotificationService.send_password_reset_otp_sms(user, otp)
-
-def send_login_verification_sms(user, code):
-    return NotificationService.send_login_verification_sms(user, code)
-
-def send_security_alert_sms(user, alert_message):
-    return NotificationService.send_security_alert_sms(user, alert_message)
-
 def send_refund_processed_email(user, refund_request):
+    if _ASYNC:
+        async_send_refund_processed_email.delay(user.id, refund_request.id)
+        return True, ""
     return NotificationService.send_refund_processed_email(user, refund_request)
 
 def send_refund_rejected_email(user, refund_request):
+    if _ASYNC:
+        async_send_refund_rejected_email.delay(user.id, refund_request.id)
+        return True, ""
     return NotificationService.send_refund_rejected_email(user, refund_request)
+
+# SMS Auth convenience functions
+def send_otp_sms(user, otp):
+    if _ASYNC:
+        async_send_otp_sms.delay(user.id, otp)
+        return True, ""
+    return NotificationService.send_otp_sms(user, otp)
+
+def send_password_reset_otp_sms(user, otp):
+    if _ASYNC:
+        async_send_password_reset_otp_sms.delay(user.id, otp)
+        return True, ""
+    return NotificationService.send_password_reset_otp_sms(user, otp)
+
+def send_login_verification_sms(user, code):
+    if _ASYNC:
+        async_send_login_verification_sms.delay(user.id, code)
+        return True, ""
+    return NotificationService.send_login_verification_sms(user, code)
+
+def send_security_alert_sms(user, alert_message):
+    if _ASYNC:
+        async_send_security_alert_sms.delay(user.id, alert_message)
+        return True, ""
+    return NotificationService.send_security_alert_sms(user, alert_message)
