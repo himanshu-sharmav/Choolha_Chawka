@@ -43,7 +43,6 @@ class Subscription(models.Model):
     base_price = models.PositiveIntegerField()
     breakfast_addon_price = models.PositiveIntegerField(default=0)
     total_paid = models.PositiveIntegerField()
-    subscription_type = models.CharField(max_length=10, choices=Plan.SERVICE_TYPE_CHOICES)
     start_date = models.DateField()
     base_end_date = models.DateField()  # start_date + duration days
     adjusted_end_date = models.DateField()  # base_end_date + leave days
