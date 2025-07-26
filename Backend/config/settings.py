@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'cloudinary_storage',
     'django.contrib.staticfiles',
     # Third party apps
     'rest_framework',
@@ -50,6 +51,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'drf_yasg',
     'corsheaders',
+    'cloudinary',                  
     # Local apps
     'accounts',
     'subscriptions',
@@ -220,27 +222,30 @@ TWILIO_PHONE_NUMBER = env('TWILIO_PHONE_NUMBER')
 RAZORPAY_KEY_ID = env('RAZORPAY_KEY_ID')
 RAZORPAY_KEY_SECRET = env('RAZORPAY_KEY_SECRET')
 
-# settings.py - ONLY CHANGE THIS
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.mandrillapp.com'  # Mailchimp Transactional SMTP
-# EMAIL_PORT = 587
-# EMAIL_USE_TLS = True
-# EMAIL_HOST_USER = env('MAILCHIMP_USERNAME')
-# EMAIL_HOST_PASSWORD = env('MAILCHIMP_API_KEY')
-# DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
-# MAILCHIMP_API_KEY = env('MAILCHIMP_API_KEY')
-# settings.py
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'email-smtp.ap-south-1.amazonaws.com'
-# EMAIL_PORT = 587
-# EMAIL_USE_TLS = True
-# EMAIL_HOST_USER = env('AWS_SES_SMTP_USER')
-# EMAIL_HOST_PASSWORD = env('AWS_SES_SMTP_PASSWORD')
 
-# EMAIL_HOST = 'smtp.sendgrid.net'
-# EMAIL_PORT = 587
-# EMAIL_HOST_USER = 'apikey'
-# EMAIL_HOST_PASSWORD = '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'
+STORAGES = {
+  'default': {
+    'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage' # or any media storage you'd like to use.
+  },
+  'staticfiles': {                                                 # this is the storage for static files
+    'BACKEND': 'django.core.files.storage.FileSystemStorage'       # this is django's default storage for static files, for using cloudinry as static files storage see usage with static files section
+  },
+}
+
+
+# Cloudinary Configuration
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': env('CLOUDINARY_CLOUD_NAME', default=''),
+    'API_KEY': env('CLOUDINARY_API_KEY', default=''),
+    'API_SECRET': env('CLOUDINARY_API_SECRET', default=''),
+}
+
+# Set Cloudinary as default file storage
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+
+# Media settings (optional but recommended)
+MEDIA_URL = '/media/'
+
 
 # Resend Email Config
 # settings.py - Resend SMTP Configuration

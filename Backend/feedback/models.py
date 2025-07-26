@@ -117,7 +117,7 @@ class FeedbackAttachment(models.Model):
         on_delete=models.CASCADE, 
         related_name='attachments'
     )
-    file = models.FileField(upload_to='feedback_attachments/%Y/%m/')
+    file = models.ImageField(upload_to='feedback_attachments/%Y/%m/')
     original_filename = models.CharField(max_length=255)
     file_size = models.PositiveIntegerField()
     uploaded_at = models.DateTimeField(auto_now_add=True)
