@@ -30,7 +30,7 @@ class SubscriptionCreateSerializer(serializers.ModelSerializer):
             base_price=base_price,
             breakfast_addon_price=breakfast_addon_price,
             total_paid=total_paid,
-            subscription_type=plan.service_type,
+            # subscription_type=plan.service_type,
             status='PENDING_PAYMENT'
         )
         
@@ -42,7 +42,7 @@ class SubscriptionBasicSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subscription
         fields = ['id', 'plan', 'breakfast_included', 'base_price', 'breakfast_addon_price',
-                  'total_paid', 'subscription_type', 'start_date', 'base_end_date', 
+                  'total_paid', 'start_date', 'base_end_date', 
                   'adjusted_end_date', 'leave_days', 'status', 'cancelled_at',
                   'days_remaining', 'created_at']
 
@@ -54,11 +54,11 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subscription
         fields = ['id', 'plan', 'breakfast_included', 'base_price', 'breakfast_addon_price',
-                  'total_paid', 'subscription_type', 'start_date', 'base_end_date', 
+                  'total_paid', 'start_date', 'base_end_date', 
                   'adjusted_end_date', 'leave_days', 'status', 'cancelled_at',
                   'days_remaining', 'is_active', 'created_at']
         read_only_fields = ['id', 'base_price', 'breakfast_addon_price', 'total_paid',
-                           'subscription_type', 'start_date', 'base_end_date', 
+                           'start_date', 'base_end_date', 
                            'adjusted_end_date', 'leave_days', 'cancelled_at', 'created_at']
     
     def get_days_remaining(self, obj):

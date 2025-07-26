@@ -76,7 +76,7 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
         
         if payment.subscription:
             p.drawString(100, 600, f"Plan: {payment.subscription.plan.name}")
-            p.drawString(100, 580, f"Service Type: {payment.subscription.subscription_type}")
+            # p.drawString(100, 580, f"Service Type: {payment.subscription.subscription_type}")
         
         p.drawString(100, 540, f"Amount: ₹{payment.amount / 100}")
         p.drawString(100, 520, f"Payment Gateway: {payment.payment_gateway}")
