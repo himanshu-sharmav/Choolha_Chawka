@@ -30,7 +30,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-u2%@eu*d)exl56)_y5$gl=@3g#=a%tfnglodvr6vuxzjkq34i$'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env.bool('DEBUG', default=False)
+DEBUG = env.bool('DEBUG', default=True)
 
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
 
@@ -215,7 +215,7 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
@@ -257,7 +257,7 @@ CLOUDINARY_STORAGE = {
 }
 
 # Set Cloudinary as default file storage
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+# DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 # Media settings (optional but recommended)
 MEDIA_URL = '/media/'
@@ -279,5 +279,6 @@ DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'
 # DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'
 EMAIL_USE_LOCALTIME = False
 SUPPORT_EMAIL= 'Choolhachowka@gmail.com'
+WHITENOISE_USE_FINDERS = True
 
 FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')  # Placeholder URL
