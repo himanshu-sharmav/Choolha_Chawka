@@ -10,6 +10,7 @@ from .views import (
     ResendOTPView, 
     UserProfileView,
     CompleteProfileView,
+    UpdateProfileView,
     PasswordResetRequestView,
     PasswordResetConfirmView,
     ChangePasswordView,
@@ -26,6 +27,7 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(), name='logout'),  # JWT logout
     path('profile/', UserProfileView.as_view(), name='profile'),
     path('complete-profile/', CompleteProfileView.as_view(), name='complete-profile'),
+     path('update-profile/', UpdateProfileView.as_view(), name='update_profile'),
     path('password-reset/', PasswordResetRequestView.as_view(), name='password-reset'),
     path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
     path('change-password/', ChangePasswordView.as_view(), name='change-password'),

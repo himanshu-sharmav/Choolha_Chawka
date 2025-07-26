@@ -311,6 +311,87 @@ class CompleteProfileView(APIView):
             'message': 'Profile updated successfully',
             'data': UserProfileSerializer(user).data
         })
+        
+class UpdateProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def patch(self, request):
+        """Update current user's profile"""
+        user = request.user
+        data = request.data
+        
+        # Define all updatable user fields
+        updatable_fields = [
+            'first_name', 
+            'last_name', 
+            'phone',
+            'email',
+            'is_tiffin_user',
+            'is_mess_user', 
+            'preferred_delivery_time',
+        ]
+        
+        # Update basic user fields
+        for field in updatable_fields:
+            if field in data:
+                setattr(user, field, data[field])
+        
+        # Handle email updates (might need verification)
+        if 'email' in data and data['email'] != user.email:
+            # You might want to add email verification logic here
+            user.email = data['email']
+            # user.email_verified = False  # If you have this field
+        
+        # Handle phone updates (might need verification)
+        if 'phone' in data and data['phone'] != user.phone:
+            user.phone = data['phone']
+            # user.phone_verified = False  # Might need re-verification
+        
+        # Update type-specific profiles (keep your existing logic)
+        if user.user_type == 'student' and 'student_profile' in data:
+            student_data = data['student_profile']
+            if hasattr(user, 'student_profile'):
+                profile = user.student_profile
+                # Update all student profile fields
+                updatable_student_fields = ['institute', 'student_id', 'hostel', 'year', 'course']
+                for field in updatable_student_fields:
+                    if field in student_data:
+                        setattr(profile, field, student_data[field])
+                profile.save()
+        
+        elif user.user_type == 'regular' and 'regular_profile' in data:
+            regular_data = data['regular_profile']
+            if hasattr(user, 'regular_profile'):
+                profile = user.regular_profile
+                # Update all regular profile fields
+                updatable_regular_fields = ['address', 'landmark', 'pincode', 'city']
+                for field in updatable_regular_fields:
+                    if field in regular_data:
+                        setattr(profile, field, regular_data[field])
+                profile.save()
+                
+        elif user.user_type == 'mess_owner' and 'mess_owner_profile' in data:
+            mess_data = data['mess_owner_profile']
+            if hasattr(user, 'mess_owner_profile'):
+                profile = user.mess_owner_profile
+                # Update all mess owner profile fields
+                updatable_mess_fields = [
+                    'mess_name', 'business_address', 'business_phone', 
+                    'business_email', 'gst_number', 'license_number'
+                ]
+                for field in updatable_mess_fields:
+                    if field in mess_data:
+                        setattr(profile, field, mess_data[field])
+                profile.save()
+        
+        user.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Profile updated successfully',
+            'data': UserProfileSerializer(user).data
+        })
+
 
 
 class PasswordResetRequestView(APIView):
