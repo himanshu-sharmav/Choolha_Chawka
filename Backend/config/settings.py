@@ -32,7 +32,13 @@ SECRET_KEY = 'django-insecure-u2%@eu*d)exl56)_y5$gl=@3g#=a%tfnglodvr6vuxzjkq34i$
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool('DEBUG', default=True)
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
+ALLOWED_HOSTS = [
+    'choolhachawka-production.up.railway.app',
+    '127.0.0.1',
+    'localhost',
+    'choolha-chawka.onrender.com'
+]
+
 
 
 # Application definition
@@ -244,7 +250,7 @@ STORAGES = {
     'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage' # or any media storage you'd like to use.
   },
   'staticfiles': {                                                 # this is the storage for static files
-    'BACKEND': 'django.core.files.storage.FileSystemStorage'       # this is django's default storage for static files, for using cloudinry as static files storage see usage with static files section
+    'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'   # this is django's default storage for static files, for using cloudinry as static files storage see usage with static files section
   },
 }
 
