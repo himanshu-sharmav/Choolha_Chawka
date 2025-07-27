@@ -1,7 +1,8 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status,filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.http import HttpResponse
 from django.template.loader import render_to_string
@@ -17,10 +18,10 @@ from subscriptions.models import Subscription
 from django.conf import settings
 # from notifications.services import send_refund_processed_email, send_refund_rejected_email
 from notifications.services import NotificationService
-
 import io
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
+from django.db.models import Sum, Count, Avg
 
 class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for viewing payment history"""
@@ -166,6 +167,74 @@ class RazorpayOrderViewSet(viewsets.ModelViewSet):
                 'success': False,
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+# payments/views.py
+
+
+class AdminPaymentViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for admin payment management"""
+    serializer_class = PaymentSerializer
+    permission_classes = [IsMessOwner]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
+    filterset_fields = ['status', 'payment_gateway', 'user', 'subscription__plan']
+    search_fields = ['transaction_id', 'user__username', 'user__email', 'user__phone']
+    ordering_fields = ['created_at', 'amount', 'status']
+    ordering = ['-created_at']
+    
+    def get_queryset(self):
+        return Payment.objects.select_related(
+            'user', 'subscription', 'subscription__plan'
+        ).all()  # Admins can see all payments
+    
+    @action(detail=False, methods=['get'])
+    def dashboard_stats(self, request):
+        """Get payment dashboard statistics for admin"""
+        all_payments = self.get_queryset()
+        
+        # Calculate statistics
+        stats = {
+            'total_payments': all_payments.count(),
+            'successful_payments': all_payments.filter(status='completed').count(),
+            'failed_payments': all_payments.filter(status='failed').count(),
+            'pending_payments': all_payments.filter(status='pending').count(),
+            'total_revenue': all_payments.filter(status='completed').aggregate(
+                total=Sum('amount')
+            )['total'] or 0,
+            'today_revenue': all_payments.filter(
+                status='completed',
+                created_at__date=timezone.now().date()
+            ).aggregate(total=Sum('amount'))['total'] or 0,
+            'this_month_revenue': all_payments.filter(
+                status='completed',
+                created_at__month=timezone.now().month,
+                created_at__year=timezone.now().year
+            ).aggregate(total=Sum('amount'))['total'] or 0,
+            'average_payment': all_payments.filter(status='completed').aggregate(
+                avg=Avg('amount')
+            )['avg'] or 0,
+        }
+        
+        # Convert amounts from paise to rupees
+        for key in ['total_revenue', 'today_revenue', 'this_month_revenue', 'average_payment']:
+            if stats[key]:
+                stats[key] = stats[key] / 100
+        
+        return Response(stats)
+    
+    @action(detail=False, methods=['get'])
+    def recent_payments(self, request):
+        """Get recent payments for admin"""
+        recent = self.get_queryset()[:20]
+        serializer = self.get_serializer(recent, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def failed_payments(self, request):
+        """Get failed payments for admin review"""
+        failed = self.get_queryset().filter(status='failed')
+        serializer = self.get_serializer(failed, many=True)
+        return Response(serializer.data)
+
 
 class RefundRequestViewSet(viewsets.ModelViewSet):
     """ViewSet for managing refund requests (Manual refund processing)"""
