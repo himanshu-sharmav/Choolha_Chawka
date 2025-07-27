@@ -2,12 +2,39 @@ from rest_framework import serializers
 from .models import Plan, Subscription, Leave
 from django.utils import timezone
 
+class PlanCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Plan
+        fields = ['code', 'name', 'description', 'service_type', 'base_price', 
+                  'included_meals', 'can_add_breakfast', 'breakfast_addon_price', 
+                  'duration_days']
+    
+    def validate_code(self, value):
+        """Ensure plan code is unique"""
+        if Plan.objects.filter(code=value).exists():
+            raise serializers.ValidationError("Plan with this code already exists")
+        return value
+    
+    def validate_base_price(self, value):
+        """Ensure base price is positive"""
+        if value <= 0:
+            raise serializers.ValidationError("Base price must be greater than 0")
+        return value
+    
+    def validate_duration_days(self, value):
+        """Ensure duration is reasonable"""
+        if value <= 0 or value > 365:
+            raise serializers.ValidationError("Duration must be between 1 and 365 days")
+        return value
+
 class PlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = Plan
         fields = ['id', 'code', 'name', 'description', 'service_type', 'base_price', 
                   'included_meals', 'can_add_breakfast', 'breakfast_addon_price', 
-                  'duration_days', 'is_active']
+                  'duration_days', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
 
 class SubscriptionCreateSerializer(serializers.ModelSerializer):
     class Meta:
