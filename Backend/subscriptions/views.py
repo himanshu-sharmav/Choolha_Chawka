@@ -159,7 +159,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             base_price=old_subscription.base_price,  # Use old subscription's price, not plan's
             breakfast_addon_price=old_subscription.breakfast_addon_price,  # Use old subscription's addon price
             total_paid=total_amount,  # ← FIX: Set the required total_paid field
-            subscription_type=old_subscription.subscription_type,
+            # subscription_type=old_subscription.subscription_type,
             start_date=new_start_date,
             status='PENDING_PAYMENT'  # Explicitly set status
         )
