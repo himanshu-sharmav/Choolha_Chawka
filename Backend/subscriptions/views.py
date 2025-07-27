@@ -15,19 +15,87 @@ from notifications.services import (
     send_leave_approved_email, send_leave_rejected_email, send_new_user_joined_email,send_subscription_cancelled_email,send_subscription_renewed_email
 )
 from payments.models import RefundRequest,Payment
+from .serializers import PlanSerializer, PlanCreateSerializer
 
-class PlanViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet for listing and retrieving plans"""
-    queryset = Plan.objects.filter(is_active=True)
+class PlanViewSet(viewsets.ModelViewSet):
+    """ViewSet for listing, retrieving, creating, updating, and deleting plans"""
+    queryset = Plan.objects.all()
     serializer_class = PlanSerializer
-    permission_classes = [IsAuthenticated]
+    
+    def get_permissions(self):
+        """
+        Instantiates and returns the list of permissions that this view requires.
+        """
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            permission_classes = [IsMessOwner]  # Only mess owners can modify plans
+        else:
+            permission_classes = [IsAuthenticated]  # Anyone authenticated can view plans
+        return [permission() for permission in permission_classes]
     
     def get_queryset(self):
-        queryset = super().get_queryset()
+        """Filter queryset based on user permissions and query parameters"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            # For modification operations, show all plans (including inactive)
+            queryset = Plan.objects.all()
+        else:
+            # For read operations, only show active plans
+            queryset = Plan.objects.filter(is_active=True)
+        
         service_type = self.request.query_params.get('service_type', None)
         if service_type:
             queryset = queryset.filter(service_type=service_type)
         return queryset
+    
+    def get_serializer_class(self):
+        """Return appropriate serializer based on action"""
+        if self.action == 'create':
+            return PlanCreateSerializer
+        return PlanSerializer
+    
+    def create(self, request, *args, **kwargs):
+        """Create a new plan (Mess Owner only)"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        plan = serializer.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Plan created successfully',
+            'data': PlanSerializer(plan).data
+        }, status=status.HTTP_201_CREATED)
+    
+    def update(self, request, *args, **kwargs):
+        """Update a plan (Mess Owner only)"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        plan = serializer.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Plan updated successfully',
+            'data': PlanSerializer(plan).data
+        })
+    
+    def partial_update(self, request, *args, **kwargs):
+        """Partially update a plan (PATCH) (Mess Owner only)"""
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Soft delete a plan by setting is_active=False (Mess Owner only)"""
+        instance = self.get_object()
+        
+        # Soft delete - set is_active to False instead of hard delete
+        instance.is_active = False
+        instance.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Plan deactivated successfully'
+        }, status=status.HTTP_204_NO_CONTENT)
+
 
 class SubscriptionViewSet(viewsets.ModelViewSet):
     """ViewSet for managing user subscriptions"""
