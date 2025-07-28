@@ -117,6 +117,7 @@ class LeaveCreateSerializer(serializers.ModelSerializer):
         subscription = data['subscription']
         leave_start_date = data['leave_start_date']
         leave_end_date = data['leave_end_date']
+        user = self.context['request'].user
         
         # Validate subscription belongs to user
         if subscription.user != self.context['request'].user:
