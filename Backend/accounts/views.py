@@ -487,7 +487,7 @@ class OwnerUserViewSet(viewsets.ReadOnlyModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['user_type', 'is_active', 'phone_verified']
     search_fields = ['username', 'email', 'phone', 'first_name', 'last_name']
-    ordering_fields = [, 'last_login', 'username']
+    ordering_fields = ['last_login', 'username']
     # ordering = ['-created_at']
     
     def get_queryset(self):
