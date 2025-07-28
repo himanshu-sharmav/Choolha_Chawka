@@ -3,6 +3,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+from rest_framework.routers import DefaultRouter
 # from rest_framework.authtoken.views import obtain_auth_token
 from .views import (
     UserRegistrationView, 
@@ -14,8 +15,12 @@ from .views import (
     PasswordResetRequestView,
     PasswordResetConfirmView,
     ChangePasswordView,
-    LogoutView
+    LogoutView,
+    OwnerUserViewSet
 )
+
+router = DefaultRouter()
+router.register(r'owner/users', OwnerUserViewSet, basename='owner-users')
 
 urlpatterns = [
     path('register/', UserRegistrationView.as_view(), name='register'),
@@ -31,4 +36,4 @@ urlpatterns = [
     path('password-reset/', PasswordResetRequestView.as_view(), name='password-reset'),
     path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
     path('change-password/', ChangePasswordView.as_view(), name='change-password'),
-]
+] + router.urls
