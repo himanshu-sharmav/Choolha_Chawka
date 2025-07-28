@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Plan, Subscription, Leave
 from django.utils import timezone
+from django.db import models
 
 class PlanCreateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -143,6 +144,24 @@ class LeaveCreateSerializer(serializers.ModelSerializer):
         if duration > 15:
             raise serializers.ValidationError("Maximum 15 days leave can be requested at once")
         
+        # NEW: Check for overlapping leaves
+        overlapping_leaves = Leave.objects.filter(
+            subscription__user=user,
+            status__in=['PENDING', 'APPROVED']  # Only check active/pending leaves
+        ).filter(
+            # Check for date range overlap using Django Q objects
+            models.Q(leave_start_date__lte=leave_end_date) & 
+            models.Q(leave_end_date__gte=leave_start_date)
+        )
+        
+        if overlapping_leaves.exists():
+            existing_leave = overlapping_leaves.first()
+            raise serializers.ValidationError(
+                f"You already have a leave request from {existing_leave.leave_start_date} "
+                f"to {existing_leave.leave_end_date} that overlaps with your requested dates. "
+                f"Please cancel the existing leave or choose different dates."
+            )
+
         return data
 
 class LeaveSerializer(serializers.ModelSerializer):
