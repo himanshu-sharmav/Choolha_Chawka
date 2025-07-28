@@ -6,6 +6,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.exceptions import ValidationError
+from subscriptions.serializers import SubscriptionSerializer
 
 User = get_user_model()
 
@@ -106,3 +107,58 @@ class ChangePasswordSerializer(serializers.Serializer):
         if not user.check_password(value):
             raise serializers.ValidationError("Current password is incorrect")
         return value
+
+
+class UserListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for user list"""
+    subscription_status = serializers.SerializerMethodField()
+    current_plan = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'first_name', 'last_name', 'email', 
+            'phone', 'user_type', 'is_active', 'phone_verified',
+            'created_at', 'last_login', 'subscription_status', 'current_plan'
+        ]
+    
+    def get_subscription_status(self, obj):
+        active_subscription = obj.subscriptions.filter(status='ACTIVE').first()
+        return active_subscription.status if active_subscription else 'No subscription'
+    
+    def get_current_plan(self, obj):
+        active_subscription = obj.subscriptions.filter(status='ACTIVE').first()
+        return active_subscription.plan.name if active_subscription else None
+
+class UserDetailSerializer(serializers.ModelSerializer):
+    """Detailed serializer for individual user view"""
+    subscriptions = SubscriptionSerializer(many=True, read_only=True)
+    profile_info = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'first_name', 'last_name', 'email', 
+            'phone', 'user_type', 'is_active', 'phone_verified',
+            'created_at', 'last_login', 'updated_at', 'subscriptions',
+            'profile_info'
+        ]
+    
+    def get_profile_info(self, obj):
+        """Get user-type specific profile information"""
+        if obj.user_type == 'student' and hasattr(obj, 'student_profile'):
+            return {
+                'institute': obj.student_profile.institute,
+                'student_id': obj.student_profile.student_id,
+                'hostel': obj.student_profile.hostel,
+                'year': obj.student_profile.year,
+                'course': obj.student_profile.course,
+            }
+        elif obj.user_type == 'regular' and hasattr(obj, 'regular_profile'):
+            return {
+                'address': obj.regular_profile.address,
+                'landmark': obj.regular_profile.landmark,
+                'pincode': obj.regular_profile.pincode,
+                'city': obj.regular_profile.city,
+            }
+        return None
