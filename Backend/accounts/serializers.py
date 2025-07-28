@@ -119,7 +119,7 @@ class UserListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'first_name', 'last_name', 'email', 
             'phone', 'user_type', 'is_active', 'phone_verified',
-            'created_at', 'last_login', 'subscription_status', 'current_plan'
+            'status', 'last_login', 'subscription_status', 'current_plan'
         ]
     
     def get_subscription_status(self, obj):
@@ -140,7 +140,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'first_name', 'last_name', 'email', 
             'phone', 'user_type', 'is_active', 'phone_verified',
-            'created_at', 'last_login', 'updated_at', 'subscriptions',
+            'status', 'last_login', 'updated_at', 'subscriptions',
             'profile_info'
         ]
     
