@@ -66,36 +66,81 @@ class SubscriptionCreateSerializer(serializers.ModelSerializer):
     
 class SubscriptionBasicSerializer(serializers.ModelSerializer):
     days_remaining = serializers.SerializerMethodField()
+    refund_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Subscription
         fields = ['id', 'plan', 'breakfast_included', 'base_price', 'breakfast_addon_price',
                   'total_paid', 'start_date', 'base_end_date', 
                   'adjusted_end_date', 'leave_days', 'status', 'cancelled_at',
-                  'days_remaining', 'created_at']
-
+                  'refund_status', 'days_remaining', 'created_at']
+    
+    def get_refund_status(self, obj):
+        """Get human-readable refund status"""
+        try:
+            refund_request = getattr(obj, 'refund_request', None)
+            if refund_request:
+                return refund_request.get_status_display()
+            return 'No refund requested'
+        except:
+            return 'No refund requested'
+    
     def get_days_remaining(self, obj):
         if obj.status != 'ACTIVE':
             return 0
         today = timezone.now().date()
         if today >= obj.adjusted_end_date:
             return 0
-        return (obj.adjusted_end_date - today).days              
+        return (obj.adjusted_end_date - today).days
+     
 
 class SubscriptionSerializer(serializers.ModelSerializer):
     plan = PlanSerializer(read_only=True)
     days_remaining = serializers.SerializerMethodField()
     is_active = serializers.SerializerMethodField()
+    refund_status = serializers.SerializerMethodField()
+    refund_info = serializers.SerializerMethodField()
     
     class Meta:
         model = Subscription
         fields = ['id', 'plan', 'breakfast_included', 'base_price', 'breakfast_addon_price',
                   'total_paid', 'start_date', 'base_end_date', 
                   'adjusted_end_date', 'leave_days', 'status', 'cancelled_at',
-                  'days_remaining', 'is_active', 'created_at']
+                  'refund_status', 'refund_info', 'days_remaining', 'is_active', 'created_at']
         read_only_fields = ['id', 'base_price', 'breakfast_addon_price', 'total_paid',
                            'start_date', 'base_end_date', 
                            'adjusted_end_date', 'leave_days', 'cancelled_at', 'created_at']
+    
+    def get_refund_status(self, obj):
+        """Get human-readable refund status"""
+        try:
+            refund_request = getattr(obj, 'refund_request', None)
+            if refund_request:
+                return refund_request.get_status_display()  # Returns "Pending", "Approved", etc.
+            return 'No refund requested'
+        except:
+            return 'No refund requested'
+    
+    def get_refund_info(self, obj):
+        """Get detailed refund information"""
+        try:
+            refund_request = getattr(obj, 'refund_request', None)
+            if refund_request:
+                return {
+                    'id': refund_request.id,
+                    'amount': refund_request.amount / 100.0,  # Convert from paise to rupees
+                    'status': refund_request.status,
+                    'status_display': refund_request.get_status_display(),
+                    'requested_at': refund_request.requested_at,
+                    'processed_at': refund_request.processed_at,
+                    'admin_comment': refund_request.admin_comment,
+                    'refund_transaction_id': refund_request.refund_transaction_id,
+                    'gateway_refund_id': refund_request.gateway_refund_id,
+                    'requested_by': refund_request.requested_by.username if refund_request.requested_by else None
+                }
+            return None
+        except:
+            return None
     
     def get_days_remaining(self, obj):
         if obj.status != 'ACTIVE':
@@ -107,6 +152,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     
     def get_is_active(self, obj):
         return obj.status == 'ACTIVE' and timezone.now().date() <= obj.adjusted_end_date
+
 
 class LeaveCreateSerializer(serializers.ModelSerializer):
     class Meta:

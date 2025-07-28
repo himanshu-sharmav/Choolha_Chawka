@@ -105,7 +105,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         if not self.request.user.is_authenticated:
             return Subscription.objects.none()  # Return an empty queryset if not authenticated
         return Subscription.objects.select_related(
-            'plan', 'user'
+            'plan', 'user','refund_request'
         ).filter(user=self.request.user)
     
     def get_serializer_class(self):
