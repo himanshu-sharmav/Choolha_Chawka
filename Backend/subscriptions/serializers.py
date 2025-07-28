@@ -37,10 +37,60 @@ class PlanSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
+# subscriptions/serializers.py
 class SubscriptionCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subscription
         fields = ['plan', 'breakfast_included']
+    
+    def validate(self, data):
+        """Validate subscription creation rules"""
+        user = self.context['request'].user
+        plan = data['plan']
+        
+        # 1. Prevent multiple active subscriptions for same plan
+        existing_active = Subscription.objects.filter(
+            user=user,
+            plan=plan,
+            status__in=['ACTIVE', 'PENDING_PAYMENT']
+        ).exists()
+        
+        if existing_active:
+            raise serializers.ValidationError(
+                f"You already have an active subscription for {plan.name}. "
+                f"Please complete or cancel your existing subscription before creating a new one."
+            )
+        
+        # 2. Prevent multiple pending subscriptions for same user
+        pending_subscriptions = Subscription.objects.filter(
+            user=user,
+            status='PENDING_PAYMENT'
+        ).count()
+        
+        if pending_subscriptions >= 2:  # Allow max 2 pending subscriptions
+            raise serializers.ValidationError(
+                "You can have maximum 2 pending subscriptions. "
+                "Please complete payment for existing subscriptions first."
+            )
+        
+        # # 3. Check for recent cancelled subscriptions (prevent abuse)
+        # from django.utils import timezone
+        # from datetime import timedelta
+        
+        # recent_cancelled = Subscription.objects.filter(
+        #     user=user,
+        #     plan=plan,
+        #     status='CANCELLED',
+        #     cancelled_at__gte=timezone.now() - timedelta(days=1)
+        # ).exists()
+        
+        # if recent_cancelled:
+        #     raise serializers.ValidationError(
+        #         f"You recently cancelled a subscription for {plan.name}. "
+        #         f"Please wait 24 hours before creating a new subscription for the same plan."
+        #     )
+        
+        return data
     
     def create(self, validated_data):
         plan = validated_data['plan']
@@ -58,11 +108,11 @@ class SubscriptionCreateSerializer(serializers.ModelSerializer):
             base_price=base_price,
             breakfast_addon_price=breakfast_addon_price,
             total_paid=total_paid,
-            # subscription_type=plan.service_type,
             status='PENDING_PAYMENT'
         )
         
         return subscription
+
     
 class SubscriptionBasicSerializer(serializers.ModelSerializer):
     days_remaining = serializers.SerializerMethodField()
@@ -134,8 +184,6 @@ class SubscriptionSerializer(serializers.ModelSerializer):
                     'requested_at': refund_request.requested_at,
                     'processed_at': refund_request.processed_at,
                     'admin_comment': refund_request.admin_comment,
-                    'refund_transaction_id': refund_request.refund_transaction_id,
-                    'gateway_refund_id': refund_request.gateway_refund_id,
                     'requested_by': refund_request.requested_by.username if refund_request.requested_by else None
                 }
             return None
