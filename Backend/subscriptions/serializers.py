@@ -302,7 +302,15 @@ class LeaveAdminSerializer(serializers.ModelSerializer):
         ]
     
     def get_subscription_user(self, obj):
-        return obj.subscription.user.get_full_name() or obj.subscription.user.username
+        """Return structured user name data"""
+        user = obj.subscription.user
+        return {
+            'first_name': user.first_name or '',
+            'last_name': user.last_name or '',
+            'full_name': user.get_full_name() or user.username,
+            'username': user.username
+        }
+
     
     def get_subscription_plan(self, obj):
         return obj.subscription.plan.name
