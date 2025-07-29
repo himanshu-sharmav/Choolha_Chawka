@@ -59,16 +59,6 @@ class FeedbackSerializer(serializers.ModelSerializer):
                 'meal_date': 'Meal date cannot be in the future.'
             })
 
-        unresolved_feedbacks = Feedback.objects.filter(
-            user=user,
-            subscription=subscription,
-            status__in=['open', 'in_progress', 'pending']
-        )
-        if unresolved_feedbacks.exists():
-            raise serializers.ValidationError(
-                "You already have an unresolved feedback for this subscription. "
-                "Please wait until it is resolved or closed before submitting a new one."
-            )    
         
         return data
 
@@ -96,6 +86,18 @@ class FeedbackCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 'meal_date': 'Meal date cannot be in the future.'
             })
+      
+        unresolved_feedbacks = Feedback.objects.filter(
+            user=user,
+            subscription=subscription,
+            status__in=['open', 'in_progress', 'pending']
+        )
+        if unresolved_feedbacks.exists():
+            raise serializers.ValidationError(
+                "You already have an unresolved feedback for this subscription. "
+                "Please wait until it is resolved or closed before submitting a new one."
+            )    
+            
         
         return data
 
