@@ -511,7 +511,7 @@ class OwnerUserViewSet(viewsets.ReadOnlyModelViewSet):
             subscriptions__status='ACTIVE'
         ).distinct()
         
-        serializer = UserListSerializer(active_users, many=True)
+        serializer = UserDetailSerializer(active_users, many=True)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
