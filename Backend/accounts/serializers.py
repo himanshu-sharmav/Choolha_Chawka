@@ -140,7 +140,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'first_name', 'last_name', 'email', 
             'phone', 'user_type', 'is_active', 'phone_verified',
-            'status', 'last_login', 'subscriptions',
+            'status', 'last_login', 'subscriptions','is_tiffin_user','is_mess_user',
             'profile_info'
         ]
     
