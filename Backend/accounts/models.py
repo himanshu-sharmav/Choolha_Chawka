@@ -78,6 +78,8 @@ class StudentProfile(models.Model):
     institute = models.CharField(max_length=100)
     student_id = models.CharField(max_length=50, blank=True)
     hostel = models.CharField(max_length=100)
+    year = models.CharField(max_length=10, blank=True)  # New field for year
+    course = models.CharField(max_length=100, blank=True)  # New field for course
     
     def __str__(self):
         return f"Student: {self.user.username}"
