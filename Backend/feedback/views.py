@@ -65,37 +65,50 @@ class FeedbackViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def add_attachment(self, request, pk=None):
-        """Add attachment to feedback"""
-        feedback = self.get_object()
-        
-        if 'file' not in request.FILES:
-            return Response({
-                'error': 'No file provided'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        file = request.FILES['file']
-        
-        # Validate file size (5MB limit)
-        if file.size > 5 * 1024 * 1024:
-            return Response({
-                'error': 'File size must be less than 5MB'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Validate file type
-        allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'text/plain']
-        if file.content_type not in allowed_types:
-            return Response({
-                'error': 'File type not allowed. Only images, PDF, and text files are allowed.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        attachment = FeedbackAttachment.objects.create(
-            feedback=feedback,
-            file=file
-        )
-        
-        serializer = FeedbackAttachmentSerializer(attachment)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    
+           """Add attachment to feedback (limited to 2 attachments max)"""
+           feedback = self.get_object()
+
+           # ✅ NEW: Check existing attachment count first
+           existing_attachments_count = feedback.attachments.count()
+
+           if existing_attachments_count >= 2:
+               return Response({
+                   'success': False,
+                   'error': 'Maximum of 2 attachments allowed per feedback. Please remove an existing attachment to add a new one.'
+               }, status=status.HTTP_400_BAD_REQUEST)
+
+           if 'file' not in request.FILES:
+               return Response({
+                   'error': 'No file provided'
+               }, status=status.HTTP_400_BAD_REQUEST)
+
+           file = request.FILES['file']
+
+           # Validate file size (5MB limit)
+           if file.size > 5 * 1024 * 1024:
+               return Response({
+                   'error': 'File size must be less than 5MB'
+               }, status=status.HTTP_400_BAD_REQUEST)
+
+           # Validate file type
+           allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'text/plain']
+           if file.content_type not in allowed_types:
+               return Response({
+                   'error': 'File type not allowed. Only images, PDF, and text files are allowed.'
+               }, status=status.HTTP_400_BAD_REQUEST)
+
+           attachment = FeedbackAttachment.objects.create(
+               feedback=feedback,
+               file=file
+           )
+
+           serializer = FeedbackAttachmentSerializer(attachment)
+           return Response({
+               'success': True,
+               'message': f'Attachment added successfully. ({existing_attachments_count + 1}/2 used)',
+               'data': serializer.data
+           }, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=['delete'])
     def remove_attachment(self, request, pk=None):
         """Remove attachment from feedback"""

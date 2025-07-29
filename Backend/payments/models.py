@@ -121,4 +121,4 @@ class RefundRequest(models.Model):
         ]
 
     def __str__(self):
-        return f"Refund: {self.subscription} | {self.amount/100} INR | {self.status}"
+        return f"Refund: {self.subscription} | {self.amount} INR | {self.status}"

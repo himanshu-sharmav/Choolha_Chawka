@@ -256,6 +256,8 @@ class CompleteProfileView(APIView):
                 student_profile.institute = student_data.get('institute', '')
                 student_profile.student_id = student_data.get('student_id', '')
                 student_profile.hostel = student_data.get('hostel', '')
+                student_profile.year = student_data.get('year', '')  # New field for year
+                student_profile.course = student_data.get('course', '')  # New field for course
                 student_profile.save()
                 
                 # Clean up other profiles

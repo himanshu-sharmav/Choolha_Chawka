@@ -34,7 +34,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 class StudentProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentProfile
-        fields = ('institute', 'student_id', 'hostel')
+        fields = ('institute', 'student_id', 'hostel','year','course')
 
 class RegularProfileSerializer(serializers.ModelSerializer):
     class Meta:
