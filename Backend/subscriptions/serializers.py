@@ -256,6 +256,14 @@ class LeaveCreateSerializer(serializers.ModelSerializer):
                 f"to {existing_leave.leave_end_date} that overlaps with your requested dates. "
                 f"Please cancel the existing leave or choose different dates."
             )
+        existing_pending = Leave.objects.filter(
+                subscription=subscription,
+                status='PENDING'
+            ).exists()
+        if existing_pending:
+                raise serializers.ValidationError(
+                    "You already have a pending leave request for this subscription."
+                )
 
         return data
 
