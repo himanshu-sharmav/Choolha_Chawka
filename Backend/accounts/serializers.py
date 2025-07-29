@@ -140,7 +140,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'first_name', 'last_name', 'email', 
             'phone', 'user_type', 'is_active', 'phone_verified',
-            'status', 'last_login', 'updated_at', 'subscriptions',
+            'status', 'last_login', 'subscriptions',
             'profile_info'
         ]
     
@@ -158,7 +158,5 @@ class UserDetailSerializer(serializers.ModelSerializer):
             return {
                 'address': obj.regular_profile.address,
                 'landmark': obj.regular_profile.landmark,
-                'pincode': obj.regular_profile.pincode,
-                'city': obj.regular_profile.city,
             }
         return None
