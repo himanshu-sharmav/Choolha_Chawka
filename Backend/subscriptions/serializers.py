@@ -178,7 +178,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             if refund_request:
                 return {
                     'id': refund_request.id,
-                    'amount': refund_request.amount / 100.0,  # Convert from paise to rupees
+                    'amount': refund_request.amount,  # Convert from paise to rupees
                     'status': refund_request.status,
                     'status_display': refund_request.get_status_display(),
                     'requested_at': refund_request.requested_at,
