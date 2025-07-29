@@ -23,23 +23,29 @@ class PlanViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         """
-        Instantiates and returns the list of permissions that this view requires.
+        Set permissions based on action:
+        - Read operations (list, retrieve): Public access
+        - Write operations (create, update, delete): Mess owners only
         """
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+        if self.action in ['list', 'retrieve']:
+            permission_classes = []  # No authentication required for viewing plans
+        elif self.action in ['create', 'update', 'partial_update', 'destroy']:
             permission_classes = [IsMessOwner]  # Only mess owners can modify plans
         else:
-            permission_classes = [IsAuthenticated]  # Anyone authenticated can view plans
+            permission_classes = [IsAuthenticated]  # Default for other actions
+        
         return [permission() for permission in permission_classes]
     
     def get_queryset(self):
         """Filter queryset based on user permissions and query parameters"""
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            # For modification operations, show all plans (including inactive)
+            # For modification operations, show all plans (including inactive) to mess owners
             queryset = Plan.objects.all()
         else:
-            # For read operations, only show active plans
+            # For read operations (including public access), only show active plans
             queryset = Plan.objects.filter(is_active=True)
         
+        # Filter by service type if provided
         service_type = self.request.query_params.get('service_type', None)
         if service_type:
             queryset = queryset.filter(service_type=service_type)
