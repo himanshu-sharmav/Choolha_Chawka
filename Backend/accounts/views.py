@@ -24,6 +24,8 @@ from .serializers import (
     PasswordResetConfirmSerializer,
     ChangePasswordSerializer
 )
+
+from .filters import UserFilter
 from rest_framework import viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -487,6 +489,7 @@ class OwnerUserViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for mess owners to view all users"""
     permission_classes = [IsMessOwner]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = UserFilter
     filterset_fields = ['user_type', 'is_active', 'phone_verified']
     search_fields = ['username', 'email', 'phone', 'first_name', 'last_name']
     ordering_fields = ['last_login', 'username']
@@ -504,14 +507,18 @@ class OwnerUserViewSet(viewsets.ReadOnlyModelViewSet):
     
     @action(detail=False, methods=['get'])
     def active_subscribers(self, request):
-        """Get users with active subscriptions"""
+        """Get users with active subscriptions, now with meal filtering."""
         from subscriptions.models import Subscription
         
-        active_users = self.get_queryset().filter(
+        # Start with the base queryset of active subscribers
+        queryset = self.get_queryset().filter(
             subscriptions__status='ACTIVE'
         ).distinct()
+
+        # Apply the custom filter
+        filtered_queryset = self.filter_queryset(queryset)
         
-        serializer = UserDetailSerializer(active_users, many=True)
+        serializer = self.get_serializer(filtered_queryset, many=True)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
