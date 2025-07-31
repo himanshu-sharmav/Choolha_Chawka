@@ -210,6 +210,7 @@ CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[
 
 ])
 
+
 CSRF_TRUSTED_ORIGINS = [
     'https://choolhachawka-production.up.railway.app',
     'https://www.choolhachowka.com',
