@@ -113,19 +113,25 @@ class UserListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for user list"""
     subscription_status = serializers.SerializerMethodField()
     current_plan = serializers.SerializerMethodField()
+    active_subscription_end_date = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = [
             'id', 'username', 'first_name', 'last_name', 'email', 
             'phone', 'user_type', 'is_active', 'phone_verified',
-            'status', 'last_login', 'subscription_status', 'current_plan'
+            'status', 'last_login', 'subscription_status', 'current_plan', 'active_subscription_end_date',
         ]
     
     def get_subscription_status(self, obj):
         active_subscription = obj.subscriptions.filter(status='ACTIVE').first()
         return active_subscription.status if active_subscription else 'No subscription'
     
+    def get_active_subscription_end_date(self, obj):
+        active_sub = obj.subscriptions.filter(status='ACTIVE').first()
+        if active_sub:
+            return active_sub.adjusted_end_date 
+
     def get_current_plan(self, obj):
         active_subscription = obj.subscriptions.filter(status='ACTIVE').first()
         return active_subscription.plan.name if active_subscription else None
@@ -134,6 +140,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
     """Detailed serializer for individual user view"""
     subscriptions = SubscriptionSerializer(many=True, read_only=True)
     profile_info = serializers.SerializerMethodField()
+    active_subscription_end_date = serializers.SerializerMethodField()
     
     class Meta:
         model = User
@@ -141,8 +148,14 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'id', 'username', 'first_name', 'last_name', 'email', 
             'phone', 'user_type', 'is_active', 'phone_verified',
             'status', 'last_login', 'subscriptions','is_tiffin_user','is_mess_user',
-            'profile_info'
+            'profile_info','active_subscription_end_date',
         ]
+
+
+    def get_active_subscription_end_date(self, obj):
+        active_sub = obj.subscriptions.filter(status='ACTIVE').first()
+        if active_sub:
+            return active_sub.adjusted_end_date     
     
     def get_profile_info(self, obj):
         """Get user-type specific profile information"""
