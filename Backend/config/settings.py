@@ -207,16 +207,18 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[
     'https://ccf-end.vercel.app',
     'https://www.choolhachowka.com',
+    'https://choolhachawka-production.up.railway.app'
 
 ])
 
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://choolhachawka-production.up.railway.app',
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
+    'https://ccf-end.vercel.app',
     'https://www.choolhachowka.com',
-    'https://ccf-end.vercel.app/'
+    'https://choolhachawka-production.up.railway.app'
+    
 
-]
+])
 CORS_ALLOW_CREDENTIALS = True
 # Twilio settings
 TWILIO_ACCOUNT_SID = env('TWILIO_ACCOUNT_SID')
