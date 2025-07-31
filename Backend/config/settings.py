@@ -205,7 +205,7 @@ SIMPLE_JWT = {
 }
 
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[
-    'https://ccf-end.vercel.app'
+    'https://ccf-end.vercel.app',
     'https://www.choolhachowka.com',
 
 ])
