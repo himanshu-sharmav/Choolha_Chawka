@@ -204,57 +204,48 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def renew(self, request, pk=None):
-        """Renew an expired or expiring subscription"""
-        old_subscription = self.get_object()
+        """Renew expired subscription by extending it"""
+        subscription = self.get_object()
 
-        if old_subscription.status not in ['ACTIVE', 'EXPIRED']:
+        # Only allow renewal for expired subscriptions
+        if subscription.status != 'EXPIRED':
             return Response({
                 'success': False,
-                'message': 'Only active or expired subscriptions can be renewed'
+                'message': 'Only expired subscriptions can be renewed. Active subscriptions will automatically continue until expiry.'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Determine start date for new subscription
-        if old_subscription.status == 'ACTIVE':
-            # Start after current subscription ends
-            new_start_date = old_subscription.adjusted_end_date + timedelta(days=1)
-        else:  # EXPIRED
-            # Start immediately for expired subscriptions
-            new_start_date = timezone.now().date()
+        # Calculate renewal amount (same as original subscription pricing)
+        renewal_amount = subscription.base_price + subscription.breakfast_addon_price
 
-        # Calculate total amount (same as old subscription)
-        total_amount = old_subscription.base_price + old_subscription.breakfast_addon_price
+        # Calculate new end date from today
+        renewal_days = subscription.plan.duration_days
+        today = timezone.now().date()
+        new_end_date = today + timedelta(days=renewal_days)
 
-        # Create new subscription with all required fields
-        new_subscription = Subscription.objects.create(
-            user=old_subscription.user,
-            plan=old_subscription.plan,
-            breakfast_included=old_subscription.breakfast_included,
-            base_price=old_subscription.base_price,  # Use old subscription's price, not plan's
-            breakfast_addon_price=old_subscription.breakfast_addon_price,  # Use old subscription's addon price
-            total_paid=total_amount,  # ← FIX: Set the required total_paid field
-            # subscription_type=old_subscription.subscription_type,
-            start_date=new_start_date,
-            status='PENDING_PAYMENT'  # Explicitly set status
-        )
+        # Update the existing subscription
+        subscription.adjusted_end_date = new_end_date
+        subscription.total_paid += renewal_amount
+        subscription.status = 'PENDING_PAYMENT'  # Requires payment to reactivate
 
+        subscription.save()
 
-        # Mark old subscription as renewed
-        old_subscription.status = 'RENEWED'
-        old_subscription.save()
-
-        # Send renewal notification
+        # Send renewal payment notification
         try:
-            send_subscription_renewed_email(request.user, old_subscription, new_subscription)
+            send_subscription_renewed_email(request.user, subscription)
         except Exception as e:
             print(f"Failed to send renewal notification: {e}")
 
         return Response({
             'success': True,
-            'message': 'Subscription renewed successfully',
-            'old_subscription_id': old_subscription.id,
-            'new_subscription_id': new_subscription.id,
-            'new_subscription': SubscriptionSerializer(new_subscription).data
+            'message': f'Subscription renewal initiated for {renewal_days} days',
+            'subscription_id': subscription.id,
+            'new_end_date': subscription.adjusted_end_date,
+            'renewal_amount': renewal_amount,
+            'status': 'PENDING_PAYMENT',
+            'subscription': SubscriptionSerializer(subscription).data
         })
+
+
 
 
 class LeaveViewSet(viewsets.ModelViewSet):

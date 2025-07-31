@@ -290,15 +290,15 @@ class NotificationService:
         return NotificationService.send_notification(user, 'subscription_expired', context)
     
     @staticmethod
-    def send_subscription_renewed_email(user, old_subscription, new_subscription):
+    def send_subscription_renewed_email(user,subscription):
         """Send email when subscription is renewed"""
         context = {
-            'old_subscription': old_subscription,
-            'new_subscription': new_subscription,
-            'plan_name': new_subscription.plan.name,
-            'start_date': new_subscription.start_date,
-            'end_date': new_subscription.adjusted_end_date,
-            'amount': new_subscription.total_paid,
+            # 'old_subscription': old_subscription,
+            'new_subscription': subscription,
+            'plan_name': subscription.plan.name,
+            'start_date': subscription.start_date,
+            'end_date': subscription.adjusted_end_date,
+            'amount': subscription.total_paid,
         }
         return NotificationService.send_notification(user, 'subscription_renewed', context)
     
@@ -420,8 +420,8 @@ def send_subscription_expiring_email(user, subscription):
 def send_subscription_expired_email(user, subscription):
     return NotificationService.send_subscription_expired_email(user, subscription)
 
-def send_subscription_renewed_email(user, old_subscription, new_subscription):
-    return NotificationService.send_subscription_renewed_email(user, old_subscription, new_subscription)
+def send_subscription_renewed_email(user,subscription):
+    return NotificationService.send_subscription_renewed_email(user,subscription)
 
 def send_payment_reminder_email(user, subscription):
     return NotificationService.send_payment_reminder_email(user, subscription)
