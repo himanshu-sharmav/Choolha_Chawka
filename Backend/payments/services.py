@@ -22,10 +22,10 @@ class RazorpayService:
         # Use pending_payment_amount if it exists, otherwise use total_paid
         if subscription.pending_payment_amount > 0:
             # For renewals - charge only the pending amount
-            amount = subscription.pending_payment_amount * 100
+            amount = int(subscription.pending_payment_amount * 100)
         else:
             # For new subscriptions - charge total_paid
-            amount = subscription.total_paid * 100
+            amount = int(subscription.total_paid * 100)
         
         receipt = f"sub_{subscription.id}_{int(timezone.now().timestamp())}"
         
