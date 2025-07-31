@@ -225,6 +225,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         # Update the existing subscription
         subscription.adjusted_end_date = new_end_date
         subscription.total_paid += renewal_amount
+        subscription.pending_payment_amount = renewal_amount
         subscription.status = 'PENDING_PAYMENT'  # Requires payment to reactivate
 
         subscription.save()
@@ -241,7 +242,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             'subscription_id': subscription.id,
             'new_end_date': subscription.adjusted_end_date,
             'renewal_amount': renewal_amount,
-            'status': 'PENDING_PAYMENT',
+            'status': 'PENDING_PAYMENT', 
             'subscription': SubscriptionSerializer(subscription).data
         })
 

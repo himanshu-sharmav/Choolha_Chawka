@@ -43,6 +43,10 @@ class Subscription(models.Model):
     base_price = models.PositiveIntegerField()
     breakfast_addon_price = models.PositiveIntegerField(default=0)
     total_paid = models.PositiveIntegerField()
+    pending_payment_amount = models.DecimalField(
+        max_digits=8, decimal_places=2, default=0,
+        help_text="Amount currently pending payment (for renewals)"
+    )
     start_date = models.DateField()
     base_end_date = models.DateField()  # start_date + duration days
     adjusted_end_date = models.DateField()  # base_end_date + leave days

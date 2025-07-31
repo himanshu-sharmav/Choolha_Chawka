@@ -18,7 +18,15 @@ class RazorpayService:
     
     def create_order(self, subscription):
         """Create Razorpay order for subscription"""
-        amount = subscription.total_paid * 100  # Convert to paise
+        
+        # Use pending_payment_amount if it exists, otherwise use total_paid
+        if subscription.pending_payment_amount > 0:
+            # For renewals - charge only the pending amount
+            amount = subscription.pending_payment_amount * 100
+        else:
+            # For new subscriptions - charge total_paid
+            amount = subscription.total_paid * 100
+        
         receipt = f"sub_{subscription.id}_{int(timezone.now().timestamp())}"
         
         order_data = {
@@ -45,6 +53,7 @@ class RazorpayService:
             return order, razorpay_order
         except Exception as e:
             raise Exception(f"Razorpay order creation failed: {str(e)}")
+ 
     
     def verify_payment(self, order_id, payment_id, signature):
         """Verify Razorpay payment signature"""
