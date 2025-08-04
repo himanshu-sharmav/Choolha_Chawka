@@ -16,7 +16,8 @@ from .views import (
     PasswordResetConfirmView,
     ChangePasswordView,
     LogoutView,
-    OwnerUserViewSet
+    OwnerUserViewSet,
+    CustomTokenObtainPairView
 )
 
 router = DefaultRouter()
@@ -27,7 +28,7 @@ urlpatterns = [
     path('verify-otp/', VerifyOTPView.as_view(), name='verify-otp'),
     path('resend-otp/', ResendOTPView.as_view(), name='resend-otp'),
     # path('login/', obtain_auth_token, name='login'),
-     path('login/', TokenObtainPairView.as_view(), name='login'),  # JWT login
+     path('login/', CustomTokenObtainPairView.as_view(), name='login'),  # JWT login
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),  # JWT refresh
     path('logout/', LogoutView.as_view(), name='logout'),  # JWT logout
     path('profile/', UserProfileView.as_view(), name='profile'),
