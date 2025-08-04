@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.db.models import Q, Count, Avg
 from django_filters.rest_framework import DjangoFilterBackend   
 
+from django.core.cache import cache
 from core.permissions import IsCustomer, IsMessOwner
 from .models import Feedback, FeedbackAttachment
 from .serializers import (
@@ -142,8 +143,10 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         
         return Response(stats)
 
+
+
 class AdminFeedbackViewSet(viewsets.ModelViewSet):
-    """ViewSet for admin feedback management"""
+    """Optimized ViewSet for admin feedback management with caching"""
     serializer_class = FeedbackSerializer
     permission_classes = [IsMessOwner]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
@@ -159,7 +162,7 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def respond(self, request, pk=None):
-        """Respond to feedback"""
+        """Respond to feedback with cache invalidation"""
         feedback = self.get_object()
         serializer = FeedbackResponseSerializer(data=request.data)
         
@@ -170,7 +173,8 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
             feedback.status = 'in_progress'
             feedback.save()
             
-            # NO EMAIL NOTIFICATION - User will see response in dashboard
+            # Clear dashboard cache after responding
+            self._clear_dashboard_cache()
             
             return Response({
                 'success': True,
@@ -179,11 +183,10 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
             })
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
     
     @action(detail=True, methods=['patch'])
     def update_status(self, request, pk=None):
-        """Update feedback status"""
+        """Update feedback status with cache invalidation"""
         feedback = self.get_object()
         serializer = FeedbackStatusUpdateSerializer(
             feedback, data=request.data, partial=True
@@ -191,6 +194,10 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
         
         if serializer.is_valid():
             serializer.save()
+            
+            # Clear dashboard cache after status update
+            self._clear_dashboard_cache()
+            
             return Response({
                 'success': True,
                 'message': 'Status updated successfully',
@@ -201,89 +208,164 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def dashboard_stats(self, request):
-        """Get dashboard statistics for admin"""
-        all_feedbacks = self.get_queryset()
+        """Optimized dashboard statistics with caching"""
+        # Check cache first
+        cache_key = 'admin_feedback_dashboard_stats'
+        stats = cache.get(cache_key)
+        if stats:
+            return Response(stats)
+        
+        # Use minimal fields for counting
+        base_qs = Feedback.objects.only(
+            'id', 'feedback_type', 'status', 'priority', 
+            'admin_response', 'responded_at', 'created_at', 'rating'
+        )
+        
+        now = timezone.now()
+        today = now.date()
+        one_week_ago = now - timezone.timedelta(days=7)
+        
+        # Single aggregated query instead of multiple counts
+        aggregate_data = base_qs.aggregate(
+            total_feedbacks=Count('id'),
+            food_complaints=Count('id', filter=Q(feedback_type='food_complaint')),
+            general_feedbacks=Count('id', filter=Q(feedback_type='general_feedback')),
+            open_feedbacks=Count('id', filter=Q(status='open')),
+            urgent_feedbacks=Count('id', filter=Q(priority='urgent')),
+            high_priority_feedbacks=Count('id', filter=Q(priority='high')),
+            resolved_today=Count('id', filter=Q(status='resolved', responded_at__date=today)),
+            recent_complaints=Count('id', filter=Q(
+                feedback_type='food_complaint', 
+                created_at__gte=one_week_ago
+            )),
+            average_rating=Avg('rating'),
+            responded_count=Count('id', filter=~Q(admin_response__in=[None, '']))
+        )
+        
+        # Calculate response rate
+        total_count = aggregate_data['total_feedbacks']
+        responded_count = aggregate_data['responded_count']
+        response_rate = round((responded_count / total_count) * 100, 2) if total_count > 0 else 0
         
         stats = {
-            'total_feedbacks': all_feedbacks.count(),
-            'food_complaints': all_feedbacks.filter(feedback_type='food_complaint').count(),
-            'general_feedbacks': all_feedbacks.filter(feedback_type='general_feedback').count(),
-            'open_feedbacks': all_feedbacks.filter(status='open').count(),
-            'urgent_feedbacks': all_feedbacks.filter(priority='urgent').count(),
-            'high_priority_feedbacks': all_feedbacks.filter(priority='high').count(),
-            'resolved_today': all_feedbacks.filter(
-                status='resolved',
-                responded_at__date=timezone.now().date()
-            ).count(),
-            'average_rating': all_feedbacks.filter(rating__isnull=False).aggregate(
-                avg_rating=Avg('rating')
-            )['avg_rating'] or 0,
-            'response_rate': self._calculate_response_rate(all_feedbacks),
-            'recent_complaints': all_feedbacks.filter(
-                feedback_type='food_complaint',
-                created_at__gte=timezone.now() - timezone.timedelta(days=7)
-            ).count(),
+            'total_feedbacks': aggregate_data['total_feedbacks'],
+            'food_complaints': aggregate_data['food_complaints'],
+            'general_feedbacks': aggregate_data['general_feedbacks'],
+            'open_feedbacks': aggregate_data['open_feedbacks'],
+            'urgent_feedbacks': aggregate_data['urgent_feedbacks'],
+            'high_priority_feedbacks': aggregate_data['high_priority_feedbacks'],
+            'resolved_today': aggregate_data['resolved_today'],
+            'average_rating': aggregate_data['average_rating'] or 0,
+            'response_rate': response_rate,
+            'recent_complaints': aggregate_data['recent_complaints'],
         }
         
+        # Cache for 3 minutes
+        cache.set(cache_key, stats, 180)
         return Response(stats)
-    
-    def _calculate_response_rate(self, feedbacks):
-        """Calculate response rate percentage"""
-        total = feedbacks.count()
-        if total == 0:
-            return 0
-        
-        responded = feedbacks.filter(
-            admin_response__isnull=False
-        ).exclude(admin_response='').count()
-        
-        return round((responded / total) * 100, 2)
     
     @action(detail=False, methods=['get'])
     def urgent_complaints(self, request):
-        """Get urgent food complaints"""
-        urgent_complaints = self.get_queryset().filter(
-            feedback_type='food_complaint',
-            priority__in=['urgent', 'high'],
-            status__in=['open', 'in_progress']
-        )
+        """Cached urgent complaints"""
+        cache_key = 'urgent_complaints'
+        complaints = cache.get(cache_key)
         
-        serializer = self.get_serializer(urgent_complaints, many=True)
-        return Response(serializer.data)
+        if not complaints:
+            urgent_complaints = self.get_queryset().filter(
+                feedback_type='food_complaint',
+                priority__in=['urgent', 'high'],
+                status__in=['open', 'in_progress']
+            )[:10]  # Limit results
+            
+            serializer = self.get_serializer(urgent_complaints, many=True)
+            complaints = serializer.data
+            cache.set(cache_key, complaints, 120)  # Cache for 2 minutes
+        
+        return Response(complaints)
     
     @action(detail=False, methods=['get'])
     def pending_responses(self, request):
-        """Get feedbacks pending admin response"""
-        pending = self.get_queryset().filter(
-            Q(admin_response__isnull=True) | Q(admin_response=''),
-            status__in=['open', 'in_progress']
-        )
+        """Get feedbacks pending admin response - cached"""
+        cache_key = 'pending_responses'
+        pending = cache.get(cache_key)
         
-        serializer = self.get_serializer(pending, many=True)
-        return Response(serializer.data)
+        if not pending:
+            pending_qs = self.get_queryset().filter(
+                Q(admin_response__isnull=True) | Q(admin_response=''),
+                status__in=['open', 'in_progress']
+            )[:20]  # Limit results
+            
+            serializer = self.get_serializer(pending_qs, many=True)
+            pending = serializer.data
+            cache.set(cache_key, pending, 120)  # Cache for 2 minutes
+        
+        return Response(pending)
     
     @action(detail=False, methods=['get'])
     def recent_activity(self, request):
-        """Get recent feedback activity for dashboard"""
-        recent = self.get_queryset().filter(
-            created_at__gte=timezone.now() - timezone.timedelta(days=7)
-        )[:10]
+        """Get recent feedback activity for dashboard - cached"""
+        cache_key = 'recent_activity'
+        recent = cache.get(cache_key)
         
-        serializer = self.get_serializer(recent, many=True)
-        return Response(serializer.data)
+        if not recent:
+            recent_qs = self.get_queryset().filter(
+                created_at__gte=timezone.now() - timezone.timedelta(days=7)
+            )[:10]
+            
+            serializer = self.get_serializer(recent_qs, many=True)
+            recent = serializer.data
+            cache.set(cache_key, recent, 180)  # Cache for 3 minutes
+        
+        return Response(recent)
     
     @action(detail=False, methods=['get'])
     def priority_summary(self, request):
-        """Get priority-wise feedback summary"""
-        summary = {}
-        for priority, label in Feedback.PRIORITY_LEVELS:
-            summary[priority] = {
-                'label': label,
-                'count': self.get_queryset().filter(priority=priority).count(),
-                'open_count': self.get_queryset().filter(
-                    priority=priority, 
-                    status='open'
-                ).count()
-            }
+        """Optimized priority summary with single query"""
+        cache_key = 'feedback_priority_summary'
+        summary = cache.get(cache_key)
+        
+        if not summary:
+            # Single query to get all priority counts
+            priority_data = Feedback.objects.aggregate(
+                **{f'{priority}_count': Count('id', filter=Q(priority=priority))
+                   for priority, _ in Feedback.PRIORITY_LEVELS},
+                **{f'{priority}_open': Count('id', filter=Q(priority=priority, status='open'))
+                   for priority, _ in Feedback.PRIORITY_LEVELS}
+            )
+            
+            summary = {}
+            for priority, label in Feedback.PRIORITY_LEVELS:
+                summary[priority] = {
+                    'label': label,
+                    'count': priority_data.get(f'{priority}_count', 0),
+                    'open_count': priority_data.get(f'{priority}_open', 0)
+                }
+            
+            cache.set(cache_key, summary, 300)  # Cache for 5 minutes
         
         return Response(summary)
+    
+    # Cache invalidation on create/update
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        self._clear_dashboard_cache()
+    
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        self._clear_dashboard_cache()
+    
+    def perform_destroy(self, instance):
+        super().perform_destroy(instance)
+        self._clear_dashboard_cache()
+    
+    def _clear_dashboard_cache(self):
+        """Clear dashboard-related caches when data changes"""
+        cache_keys = [
+            'admin_feedback_dashboard_stats',
+            'urgent_complaints',
+            'pending_responses',
+            'recent_activity',
+            'feedback_priority_summary'
+        ]
+        cache.delete_many(cache_keys)
+
