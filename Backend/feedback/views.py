@@ -261,7 +261,6 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
         }
         
         # Cache for 3 minutes
-        cache.set(cache_key, stats, 180)
         return Response(stats)
     
     @action(detail=False, methods=['get'])
@@ -279,7 +278,6 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
             
             serializer = self.get_serializer(urgent_complaints, many=True)
             complaints = serializer.data
-            cache.set(cache_key, complaints, 120)  # Cache for 2 minutes
         
         return Response(complaints)
     
@@ -297,7 +295,6 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
             
             serializer = self.get_serializer(pending_qs, many=True)
             pending = serializer.data
-            cache.set(cache_key, pending, 120)  # Cache for 2 minutes
         
         return Response(pending)
     
@@ -314,7 +311,6 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
             
             serializer = self.get_serializer(recent_qs, many=True)
             recent = serializer.data
-            cache.set(cache_key, recent, 180)  # Cache for 3 minutes
         
         return Response(recent)
     
@@ -341,31 +337,6 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
                     'open_count': priority_data.get(f'{priority}_open', 0)
                 }
             
-            cache.set(cache_key, summary, 300)  # Cache for 5 minutes
-        
         return Response(summary)
     
-    # Cache invalidation on create/update
-    def perform_create(self, serializer):
-        super().perform_create(serializer)
-        self._clear_dashboard_cache()
-    
-    def perform_update(self, serializer):
-        super().perform_update(serializer)
-        self._clear_dashboard_cache()
-    
-    def perform_destroy(self, instance):
-        super().perform_destroy(instance)
-        self._clear_dashboard_cache()
-    
-    def _clear_dashboard_cache(self):
-        """Clear dashboard-related caches when data changes"""
-        cache_keys = [
-            'admin_feedback_dashboard_stats',
-            'urgent_complaints',
-            'pending_responses',
-            'recent_activity',
-            'feedback_priority_summary'
-        ]
-        cache.delete_many(cache_keys)
-
+  
