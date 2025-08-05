@@ -42,12 +42,11 @@ def async_send_subscription_cancelled_email(user_id, subscription_id):
     )
 
 @shared_task
-def async_send_subscription_renewed_email(user_id, old_sub_id, new_sub_id):
+def async_send_subscription_renewed_email(user_id,sub_id):
     from subscriptions.models import Subscription
     NS.send_subscription_renewed_email(
         _get_user(user_id),
-        Subscription.objects.get(id=old_sub_id),
-        Subscription.objects.get(id=new_sub_id)
+        Subscription.objects.get(id=sub_id)
     )
 
 # Leave Management Tasks
