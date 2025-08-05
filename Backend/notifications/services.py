@@ -449,17 +449,16 @@ def send_leave_submitted_email(user, leave):
         return True, ""
     return NotificationService.send_leave_submitted_email(user, leave)
 
-def send_leave_submitted_email(user, leave):
-    """Send email when leave is submitted - ASYNC ONLY"""
+def send_leave_approved_email(user, leave):
     if not _ASYNC:
-            print("❌ Skipping send_leave_submitted_email - Celery worker not available")
+            print("❌ Skipping send_leave_approved_email - Celery worker not available")
             return False, "Async notifications not available"
     return NotificationService.send_leave_approved_email(user, leave)
 
 def send_leave_rejected_email(user, leave):
     if not _ASYNC:
-        print("❌ Skipping send_leave_rejected_email - Celery worker not available")
-        return False, "Async notifications not available"
+            print("❌ Skipping send_leave_rejected_email - Celery worker not available")
+            return False, "Async notifications not available"
     return NotificationService.send_leave_rejected_email(user, leave)
 
 def send_new_user_joined_email(mess_owners, user, subscription):
