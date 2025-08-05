@@ -115,7 +115,7 @@ else:
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': env('DB_NAME', default='ChoolaChawka_dev'),
             'USER': env('DB_USER', default='postgres'),
-            'PASSWORD': env('DB_PASSWORD', default='postgres_password'),
+            'PASSWORD': env('DB_PASSWORD', default='Himan123@'),
             'HOST': env('DB_HOST', default='localhost'),
             'PORT': env('DB_PORT', default='5432'),
         }
@@ -220,6 +220,15 @@ CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
 
 ])
 CORS_ALLOW_CREDENTIALS = True
+
+# Celery Configuration
+CELERY_BROKER_URL = env('REDIS_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = env('REDIS_URL', default='redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Asia/Kolkata'
+
 # Twilio settings
 TWILIO_ACCOUNT_SID = env('TWILIO_ACCOUNT_SID')
 TWILIO_AUTH_TOKEN = env('TWILIO_AUTH_TOKEN')
