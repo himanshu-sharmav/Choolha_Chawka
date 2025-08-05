@@ -18,6 +18,8 @@ class FeedbackSerializer(serializers.ModelSerializer):
     days_since_created = serializers.ReadOnlyField()
     is_food_complaint = serializers.ReadOnlyField()
     is_urgent = serializers.ReadOnlyField()
+    attachment_count = serializers.SerializerMethodField()
+    can_add_attachments = serializers.SerializerMethodField()
     
     class Meta:
         model = Feedback
@@ -26,13 +28,19 @@ class FeedbackSerializer(serializers.ModelSerializer):
             'subscription', 'meal_date', 'meal_type', 'priority', 'status',
             'created_at', 'updated_at', 'admin_response', 'responded_at',
             'responded_by', 'attachments', 'days_since_created', 
-            'is_food_complaint', 'is_urgent'
+            'is_food_complaint', 'is_urgent','attachment_count', 'can_add_attachments'
         ]
         read_only_fields = [
             'id', 'user', 'created_at', 'updated_at', 'responded_at', 
             'responded_by', 'priority'
         ]
     
+    def get_attachment_count(self, obj):
+        return obj.attachments.count()
+    
+    def get_can_add_attachments(self, obj):
+        return obj.attachments.count() < 2
+
     def validate(self, data):
         # Validate food complaint specific fields
         if data.get('feedback_type') == 'food_complaint':
@@ -50,6 +58,7 @@ class FeedbackSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 'meal_date': 'Meal date cannot be in the future.'
             })
+
         
         return data
 
@@ -63,6 +72,19 @@ class FeedbackCreateSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         # Same validation as FeedbackSerializer
+        user = self.context['request'].user
+        subscription = data.get('subscription')
+        unresolved_feedbacks = Feedback.objects.filter(
+            user=user,
+            subscription=subscription,
+            status__in=['open', 'in_progress', 'pending'],
+        )
+        if unresolved_feedbacks.exists():
+            raise serializers.ValidationError(
+                "You already have an unresolved feedback for this subscription. "
+                "Please wait until it is resolved or closed before submitting a new one."
+            )
+
         if data.get('feedback_type') == 'food_complaint':
             if not data.get('meal_date'):
                 raise serializers.ValidationError({

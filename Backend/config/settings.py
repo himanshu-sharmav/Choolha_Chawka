@@ -27,12 +27,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-u2%@eu*d)exl56)_y5$gl=@3g#=a%tfnglodvr6vuxzjkq34i$'
+SECRET_KEY = os.environ.get('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool('DEBUG', default=False)
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[
+    'choolhachawka-production.up.railway.app',
+    'localhost',
+    '127.0.0.1',
+
+])
+
 
 
 # Application definition
@@ -43,11 +49,10 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'cloudinary_storage',
     'django.contrib.staticfiles',
     # Third party apps
     'rest_framework',
-    # 'rest_framework.authtoken',
+    'cloudinary_storage',
     'rest_framework_simplejwt.token_blacklist',
     'drf_yasg',
     'corsheaders',
@@ -105,39 +110,17 @@ if env('DATABASE_URL', default=None):
     }
 else:
     # Local development - use local PostgreSQL
-    DATABASES = {
+    DATABASES = { 
         'default': {
-            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'ENGINE': 'django.db.backends.postgresql',
             'NAME': env('DB_NAME', default='ChoolaChawka_dev'),
             'USER': env('DB_USER', default='postgres'),
-            'PASSWORD': env('DB_PASSWORD', default='Himan123@'),
+            'PASSWORD': env('DB_PASSWORD', default='postgres_password'),
             'HOST': env('DB_HOST', default='localhost'),
             'PORT': env('DB_PORT', default='5432'),
         }
     }
 
-# if 'RDS_DB_NAME' in os.environ:
-#     DATABASES = {
-#         'default': {
-#             'ENGINE': 'django.db.backends.postgresql',
-#             'NAME': os.environ['RDS_DB_NAME'],
-#             'USER': os.environ['RDS_USERNAME'],
-#             'PASSWORD': os.environ['RDS_PASSWORD'],
-#             'HOST': os.environ['RDS_HOSTNAME'],
-#             'PORT': os.environ['RDS_PORT'],
-#         }
-#     }
-# else:
-#     DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-#         'NAME': 'ChoolaChawka_dev',
-#         'USER': 'postgres',
-#         'PASSWORD': 'Himan123@',
-#         'HOST': 'localhost',
-#         'PORT': '5432',
-#     }
-#     }
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'mediafiles')
@@ -202,7 +185,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        # 'rest_framework.authentication.TokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
@@ -215,29 +197,29 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[
+    'https://ccf-end.vercel.app',
+    'https://www.choolhachowka.com',
+    'https://choolhachawka-production.up.railway.app'
 
-CSRF_TRUSTED_ORIGINS = [
-    "http://*",
-    "https://*",
-]
-
-# Celery Configuration
-CELERY_BROKER_URL = env('REDIS_URL', default='redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = env('REDIS_URL', default='redis://localhost:6379/0')
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'Asia/Kolkata'
+])
 
 
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
+    'https://ccf-end.vercel.app',
+    'https://www.choolhachowka.com',
+    'https://choolhachawka-production.up.railway.app'
+    
+
+])
+CORS_ALLOW_CREDENTIALS = True
 # Twilio settings
 TWILIO_ACCOUNT_SID = env('TWILIO_ACCOUNT_SID')
 TWILIO_AUTH_TOKEN = env('TWILIO_AUTH_TOKEN')
@@ -250,10 +232,10 @@ RAZORPAY_KEY_SECRET = env('RAZORPAY_KEY_SECRET')
 
 STORAGES = {
   'default': {
-    'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage' # or any media storage you'd like to use.
+    'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage' 
   },
-  'staticfiles': {                                                 # this is the storage for static files
-    'BACKEND': 'django.core.files.storage.FileSystemStorage'       # this is django's default storage for static files, for using cloudinry as static files storage see usage with static files section
+  'staticfiles': {                                                 
+    'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'   
   },
 }
 
@@ -266,7 +248,7 @@ CLOUDINARY_STORAGE = {
 }
 
 # Set Cloudinary as default file storage
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+# DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 # Media settings (optional but recommended)
 MEDIA_URL = '/media/'
@@ -281,12 +263,14 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'resend'  # This is literally the string 'resend'
 EMAIL_HOST_PASSWORD = env('RESEND_API_KEY')  # Your Resend API key
 # DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'  # Your verified domain
-SERVER_EMAIL = 'noreply@choolhachowka.com'
+SERVER_EMAIL = env('SERVER_EMAIL', default='noreply@choolhachowka.com')
 
-DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@choolhachowka.com')
 
 # DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'
 EMAIL_USE_LOCALTIME = False
-SUPPORT_EMAIL= 'Choolhachowka@gmail.com'
+SUPPORT_EMAIL = env('SUPPORT_EMAIL', default='Choolhachowka.com')
+WHITENOISE_USE_FINDERS = True
 
-FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')  # Placeholder URL
+FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:5173')  # Placeholder URL
+# WHITENOISE_USE_FINDERS = True

@@ -3,6 +3,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+from rest_framework.routers import DefaultRouter
 # from rest_framework.authtoken.views import obtain_auth_token
 from .views import (
     UserRegistrationView, 
@@ -14,15 +15,20 @@ from .views import (
     PasswordResetRequestView,
     PasswordResetConfirmView,
     ChangePasswordView,
-    LogoutView
+    LogoutView,
+    OwnerUserViewSet,
+    CustomTokenObtainPairView
 )
+
+router = DefaultRouter()
+router.register(r'owner/users', OwnerUserViewSet, basename='owner-users')
 
 urlpatterns = [
     path('register/', UserRegistrationView.as_view(), name='register'),
     path('verify-otp/', VerifyOTPView.as_view(), name='verify-otp'),
     path('resend-otp/', ResendOTPView.as_view(), name='resend-otp'),
     # path('login/', obtain_auth_token, name='login'),
-     path('login/', TokenObtainPairView.as_view(), name='login'),  # JWT login
+     path('login/', CustomTokenObtainPairView.as_view(), name='login'),  # JWT login
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),  # JWT refresh
     path('logout/', LogoutView.as_view(), name='logout'),  # JWT logout
     path('profile/', UserProfileView.as_view(), name='profile'),
@@ -31,4 +37,4 @@ urlpatterns = [
     path('password-reset/', PasswordResetRequestView.as_view(), name='password-reset'),
     path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
     path('change-password/', ChangePasswordView.as_view(), name='change-password'),
-]
+] + router.urls

@@ -6,8 +6,19 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.exceptions import ValidationError
+from subscriptions.serializers import SubscriptionSerializer
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 User = get_user_model()
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        data['status'] = self.user.status  
+        data['user_type'] = self.user.user_type 
+        return data
+
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -15,7 +26,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('username', 'email', 'phone', 'password', 'confirm_password')
+        fields = ('username', 'email', 'phone','user_type', 'first_name', 'last_name', 'password', 'confirm_password')
     
     def validate(self, data):
         if data.get('password') != data.get('confirm_password'):
@@ -33,7 +44,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 class StudentProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentProfile
-        fields = ('institute', 'student_id', 'hostel')
+        fields = ('institute', 'student_id', 'hostel','year','course')
 
 class RegularProfileSerializer(serializers.ModelSerializer):
     class Meta:
@@ -106,3 +117,69 @@ class ChangePasswordSerializer(serializers.Serializer):
         if not user.check_password(value):
             raise serializers.ValidationError("Current password is incorrect")
         return value
+
+
+class UserListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for user list"""
+    subscription_status = serializers.SerializerMethodField()
+    current_plan = serializers.SerializerMethodField()
+    active_subscription_end_date = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'first_name', 'last_name', 'email', 
+            'phone', 'user_type', 'is_active', 'phone_verified',
+            'status', 'last_login', 'subscription_status', 'current_plan', 'active_subscription_end_date',
+        ]
+    
+    def get_subscription_status(self, obj):
+        active_subscription = obj.subscriptions.filter(status='ACTIVE').first()
+        return active_subscription.status if active_subscription else 'No subscription'
+    
+    def get_active_subscription_end_date(self, obj):
+        active_sub = obj.subscriptions.filter(status='ACTIVE').first()
+        if active_sub:
+            return active_sub.adjusted_end_date 
+
+    def get_current_plan(self, obj):
+        active_subscription = obj.subscriptions.filter(status='ACTIVE').first()
+        return active_subscription.plan.name if active_subscription else None
+
+class UserDetailSerializer(serializers.ModelSerializer):
+    """Detailed serializer for individual user view"""
+    subscriptions = SubscriptionSerializer(many=True, read_only=True)
+    profile_info = serializers.SerializerMethodField()
+    active_subscription_end_date = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'first_name', 'last_name', 'email', 
+            'phone', 'user_type', 'is_active', 'phone_verified',
+            'status', 'last_login', 'subscriptions','is_tiffin_user','is_mess_user',
+            'profile_info','active_subscription_end_date',
+        ]
+
+
+    def get_active_subscription_end_date(self, obj):
+        active_sub = obj.subscriptions.filter(status='ACTIVE').first()
+        if active_sub:
+            return active_sub.adjusted_end_date     
+    
+    def get_profile_info(self, obj):
+        """Get user-type specific profile information"""
+        if obj.user_type == 'student' and hasattr(obj, 'student_profile'):
+            return {
+                'institute': obj.student_profile.institute,
+                'student_id': obj.student_profile.student_id,
+                'hostel': obj.student_profile.hostel,
+                'year': obj.student_profile.year,
+                'course': obj.student_profile.course,
+            }
+        elif obj.user_type == 'regular' and hasattr(obj, 'regular_profile'):
+            return {
+                'address': obj.regular_profile.address,
+                'landmark': obj.regular_profile.landmark,
+            }
+        return None

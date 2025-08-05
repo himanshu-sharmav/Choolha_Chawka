@@ -25,7 +25,22 @@ from .serializers import (
     ChangePasswordSerializer
 )
 
+from .filters import UserFilter
+from rest_framework import viewsets, filters
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
+from core.permissions import IsMessOwner
+from .models import User
+from .serializers import UserDetailSerializer, UserListSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import CustomTokenObtainPairSerializer
+
+
 User = get_user_model()
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
 
 class UserRegistrationView(APIView):
     permission_classes = [AllowAny]
@@ -249,6 +264,8 @@ class CompleteProfileView(APIView):
                 student_profile.institute = student_data.get('institute', '')
                 student_profile.student_id = student_data.get('student_id', '')
                 student_profile.hostel = student_data.get('hostel', '')
+                student_profile.year = student_data.get('year', '')  # New field for year
+                student_profile.course = student_data.get('course', '')  # New field for course
                 student_profile.save()
                 
                 # Clean up other profiles
@@ -470,3 +487,60 @@ class ChangePasswordView(APIView):
             'success': True,
             'message': 'Password changed successfully'
         })
+
+
+
+
+class OwnerUserViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for mess owners to view all users"""
+    permission_classes = [IsMessOwner]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = UserFilter
+    filterset_fields = ['user_type', 'is_active', 'phone_verified']
+    search_fields = ['username', 'email', 'phone', 'first_name', 'last_name']
+    ordering_fields = ['last_login', 'username']
+    # ordering = ['-created_at']
+    
+    def get_queryset(self):
+        return User.objects.select_related().prefetch_related(
+            'subscriptions', 'subscriptions__plan'
+        ).exclude(user_type='mess_owner')  # Don't show other mess owners
+    
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return UserListSerializer
+        return UserDetailSerializer
+    
+    @action(detail=False, methods=['get'])
+    def active_subscribers(self, request):
+        """Get users with active subscriptions, now with meal filtering."""
+        from subscriptions.models import Subscription
+        
+        # Start with the base queryset of active subscribers
+        queryset = self.get_queryset().filter(
+            subscriptions__status='ACTIVE'
+        ).distinct()
+
+        # Apply the custom filter
+        filtered_queryset = self.filter_queryset(queryset)
+        
+        serializer = self.get_serializer(filtered_queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def user_stats(self, request):
+        """Get user statistics for dashboard"""
+        queryset = self.get_queryset()
+        
+        stats = {
+            'total_users': queryset.count(),
+            'active_users': queryset.filter(is_active=True).count(),
+            'students': queryset.filter(user_type='student').count(),
+            'regular_users': queryset.filter(user_type='regular').count(),
+            'verified_users': queryset.filter(phone_verified=True).count(),
+            'users_with_active_subscriptions': queryset.filter(
+                subscriptions__status='ACTIVE'
+            ).distinct().count(),
+        }
+        
+        return Response(stats)

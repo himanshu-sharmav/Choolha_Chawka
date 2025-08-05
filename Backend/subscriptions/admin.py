@@ -11,9 +11,9 @@ class PlanAdmin(admin.ModelAdmin):
 
 @admin.register(Subscription)
 class SubscriptionAdmin(admin.ModelAdmin):
-    list_display = ('user', 'plan', 'subscription_type', 'start_date', 'adjusted_end_date', 
+    list_display = ('user', 'plan', 'start_date', 'adjusted_end_date', 
                     'status', 'total_paid')
-    list_filter = ('status', 'subscription_type', 'breakfast_included')
+    list_filter = ('status', 'breakfast_included')
     search_fields = ('user__username', 'user__email', 'user__phone')
     readonly_fields = ('created_at', 'updated_at', 'base_price', 'breakfast_addon_price')
     date_hierarchy = 'start_date'

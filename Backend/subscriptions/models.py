@@ -43,7 +43,10 @@ class Subscription(models.Model):
     base_price = models.PositiveIntegerField()
     breakfast_addon_price = models.PositiveIntegerField(default=0)
     total_paid = models.PositiveIntegerField()
-    subscription_type = models.CharField(max_length=10, choices=Plan.SERVICE_TYPE_CHOICES)
+    pending_payment_amount = models.DecimalField(
+        max_digits=8, decimal_places=2, default=0,
+        help_text="Amount currently pending payment (for renewals)"
+    )
     start_date = models.DateField()
     base_end_date = models.DateField()  # start_date + duration days
     adjusted_end_date = models.DateField()  # base_end_date + leave days
@@ -64,6 +67,28 @@ class Subscription(models.Model):
             self.base_end_date = self.start_date + timedelta(days=self.plan.duration_days)
         if not self.adjusted_end_date:
             self.adjusted_end_date = self.base_end_date
+        today = timezone.now().date()
+        # Make sure you have an 'adjusted_end_date' field
+        if self.adjusted_end_date and self.adjusted_end_date < today:
+            self.status = 'EXPIRED'
+        elif hasattr(self, 'days_remaining') and self.days_remaining == 0:
+            self.status = 'EXPIRED' 
+
+        if self.adjusted_end_date:
+            if self.adjusted_end_date < today:
+                # Subscription has expired
+                if self.status not in ['CANCELLED', 'REFUNDED']:
+                    self.status = 'EXPIRED'
+            elif self.adjusted_end_date >= today:
+                # Subscription is current/future
+                if self.status == 'EXPIRED':
+                    # Reactivate if date was extended
+                    self.status = 'ACTIVE'
+                elif self.status == 'PENDING_PAYMENT':
+                    # Keep pending until payment is confirmed
+                    pass            
+        # You might also want to check
+
         super().save(*args, **kwargs)
 
     def calculate_refund(self):

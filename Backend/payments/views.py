@@ -1,7 +1,8 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status,filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.http import HttpResponse
 from django.template.loader import render_to_string
@@ -17,78 +18,149 @@ from subscriptions.models import Subscription
 from django.conf import settings
 # from notifications.services import send_refund_processed_email, send_refund_rejected_email
 from notifications.services import NotificationService
-
 import io
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
+from django.db.models import Sum, Count, Avg
 
 class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for viewing payment history"""
     serializer_class = PaymentSerializer
-    permission_classes = [IsCustomer]
+    permission_classes = [IsAuthenticated]  # Changed from IsCustomer
     
     def get_queryset(self):
         if not self.request.user.is_authenticated:
-            return Payment.objects.none()  # Return an empty queryset if not authenticated
+            return Payment.objects.none()
         return Payment.objects.select_related(
-            'user', 'subscription', 'subscription__plan'
-        ).filter(user=self.request.user)
+            'subscription', 'subscription__user', 'subscription__plan'
+        ).filter(subscription__user=self.request.user)  # Fixed relationship
     
     @action(detail=True, methods=['get'])
     def receipt(self, request, pk=None):
-        """Download payment receipt"""
+        """Download payment receipt as HTML"""
         payment = self.get_object()
+        
+        # Ensure user owns this payment
+        if payment.subscription.user != request.user:
+            return Response({
+                'error': 'You do not have permission to view this receipt.'
+            }, status=status.HTTP_403_FORBIDDEN)
         
         # Calculate amount in rupees (convert from paise)
         amount_in_rupees = payment.amount / 100
         
-        # Generate HTML receipt
-        html_content = render_to_string('payments/receipt.html', {
-            'payment': payment,
-            'user': payment.user,
-            'subscription': payment.subscription,
-            'plan': payment.subscription.plan if payment.subscription else None,
-            'amount_in_rupees': amount_in_rupees,  # Add this
-        })
-        
-        # Return HTML receipt
-        response = HttpResponse(html_content, content_type='text/html')
-        response['Content-Disposition'] = f'inline; filename="receipt_{payment.transaction_id}.html"'
-        return response
-    
+        try:
+            # Generate HTML receipt
+            html_content = render_to_string('payments/receipt.html', {
+                'payment': payment,
+                'user': payment.subscription.user,
+                'subscription': payment.subscription,
+                'plan': payment.subscription.plan if payment.subscription else None,
+                'amount_in_rupees': amount_in_rupees,
+                'current_date': timezone.now(),
+            })
+            
+            # Return HTML receipt
+            response = HttpResponse(html_content, content_type='text/html')
+            response['Content-Disposition'] = f'inline; filename="receipt_{payment.transaction_id}.html"'
+            return response
+            
+        except Exception as e:
+            return Response({
+                'error': f'Failed to generate receipt: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=True, methods=['get'])
     def receipt_pdf(self, request, pk=None):
         """Download payment receipt as PDF"""
         payment = self.get_object()
         
-        # Create PDF
-        buffer = io.BytesIO()
-        p = canvas.Canvas(buffer, pagesize=letter)
+        # Ensure user owns this payment
+        if payment.subscription.user != request.user:
+            return Response({
+                'error': 'You do not have permission to view this receipt.'
+            }, status=status.HTTP_403_FORBIDDEN)
         
-        # Add content to PDF
-        p.drawString(100, 750, f"Choolha Chowka - Payment Receipt")
-        p.drawString(100, 720, f"Receipt ID: {payment.transaction_id}")
-        p.drawString(100, 700, f"Date: {payment.created_at.strftime('%B %d, %Y')}")
-        p.drawString(100, 680, f"Customer: {payment.user.get_full_name() or payment.user.username}")
-        p.drawString(100, 660, f"Email: {payment.user.email}")
-        p.drawString(100, 640, f"Phone: {payment.user.phone}")
-        
-        if payment.subscription:
-            p.drawString(100, 600, f"Plan: {payment.subscription.plan.name}")
-            p.drawString(100, 580, f"Service Type: {payment.subscription.subscription_type}")
-        
-        p.drawString(100, 540, f"Amount: ₹{payment.amount / 100}")
-        p.drawString(100, 520, f"Payment Gateway: {payment.payment_gateway}")
-        p.drawString(100, 500, f"Status: {payment.status}")
-        
-        p.showPage()
-        p.save()
-        
-        buffer.seek(0)
-        response = HttpResponse(buffer, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="receipt_{payment.transaction_id}.pdf"'
-        return response
+        try:
+            # Create PDF
+            buffer = io.BytesIO()
+            p = canvas.Canvas(buffer, pagesize=letter)
+            width, height = letter
+            
+            # Header
+            p.setFont("Helvetica-Bold", 20)
+            p.drawString(100, height - 80, "🍽️ Mess Choolha Chowka")
+            
+            p.setFont("Helvetica", 12)
+            p.drawString(100, height - 100, "Payment Receipt")
+            
+            # Receipt details
+            y_position = height - 140
+            
+            p.setFont("Helvetica-Bold", 14)
+            p.drawString(100, y_position, f"Receipt ID: {payment.transaction_id}")
+            y_position -= 30
+            
+            p.setFont("Helvetica", 12)
+            p.drawString(100, y_position, f"Date: {payment.created_at.strftime('%B %d, %Y at %I:%M %p')}")
+            y_position -= 20
+            
+            # Customer details
+            user = payment.subscription.user
+            p.drawString(100, y_position, f"Customer: {user.get_full_name() or user.username}")
+            y_position -= 20
+            p.drawString(100, y_position, f"Email: {user.email}")
+            y_position -= 20
+            p.drawString(100, y_position, f"Phone: {user.phone}")
+            y_position -= 30
+            
+            # Subscription details
+            if payment.subscription:
+                p.setFont("Helvetica-Bold", 12)
+                p.drawString(100, y_position, "Subscription Details:")
+                y_position -= 20
+                
+                p.setFont("Helvetica", 12)
+                p.drawString(100, y_position, f"Plan: {payment.subscription.plan.name}")
+                y_position -= 20
+                p.drawString(100, y_position, f"Service Type: {payment.subscription.plan.service_type.title()}")
+                y_position -= 20
+                p.drawString(100, y_position, f"Duration: {payment.subscription.plan.duration_days} days")
+                y_position -= 30
+            
+            # Payment details
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(100, y_position, "Payment Details:")
+            y_position -= 20
+            
+            p.setFont("Helvetica", 12)
+            p.drawString(100, y_position, f"Amount: ₹{payment.amount / 100:.2f}")
+            y_position -= 20
+            p.drawString(100, y_position, f"Payment Gateway: {payment.payment_gateway}")
+            y_position -= 20
+            p.drawString(100, y_position, f"Status: {payment.get_status_display()}")
+            y_position -= 20
+            p.drawString(100, y_position, f"Currency: {payment.currency}")
+            y_position -= 40
+            
+            # Footer
+            p.setFont("Helvetica", 10)
+            p.drawString(100, 100, "Thank you for choosing Mess Choolha Chowka!")
+            p.drawString(100, 85, "For support: support@choolhachowka.com")
+            
+            p.showPage()
+            p.save()
+            
+            buffer.seek(0)
+            response = HttpResponse(buffer, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="receipt_{payment.transaction_id}.pdf"'
+            return response
+            
+        except Exception as e:
+            return Response({
+                'error': f'Failed to generate PDF receipt: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     
     @action(detail=False, methods=['get'], permission_classes=[])
     def test_page(self, request):
@@ -166,6 +238,74 @@ class RazorpayOrderViewSet(viewsets.ModelViewSet):
                 'success': False,
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+# payments/views.py
+
+
+class AdminPaymentViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for admin payment management"""
+    serializer_class = PaymentSerializer
+    permission_classes = [IsMessOwner]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
+    filterset_fields = ['status', 'payment_gateway', 'user', 'subscription__plan']
+    search_fields = ['transaction_id', 'user__username', 'user__email', 'user__phone']
+    ordering_fields = ['created_at', 'amount', 'status']
+    ordering = ['-created_at']
+    
+    def get_queryset(self):
+        return Payment.objects.select_related(
+            'user', 'subscription', 'subscription__plan'
+        ).all()  # Admins can see all payments
+    
+    @action(detail=False, methods=['get'])
+    def dashboard_stats(self, request):
+        """Get payment dashboard statistics for admin"""
+        all_payments = self.get_queryset()
+        
+        # Calculate statistics
+        stats = {
+            'total_payments': all_payments.count(),
+            'successful_payments': all_payments.filter(status='completed').count(),
+            'failed_payments': all_payments.filter(status='failed').count(),
+            'pending_payments': all_payments.filter(status='pending').count(),
+            'total_revenue': all_payments.filter(status='completed').aggregate(
+                total=Sum('amount')
+            )['total'] or 0,
+            'today_revenue': all_payments.filter(
+                status='completed',
+                created_at__date=timezone.now().date()
+            ).aggregate(total=Sum('amount'))['total'] or 0,
+            'this_month_revenue': all_payments.filter(
+                status='completed',
+                created_at__month=timezone.now().month,
+                created_at__year=timezone.now().year
+            ).aggregate(total=Sum('amount'))['total'] or 0,
+            'average_payment': all_payments.filter(status='completed').aggregate(
+                avg=Avg('amount')
+            )['avg'] or 0,
+        }
+        
+        # Convert amounts from paise to rupees
+        for key in ['total_revenue', 'today_revenue', 'this_month_revenue', 'average_payment']:
+            if stats[key]:
+                stats[key] = stats[key] / 100
+        
+        return Response(stats)
+    
+    @action(detail=False, methods=['get'])
+    def recent_payments(self, request):
+        """Get recent payments for admin"""
+        recent = self.get_queryset()[:20]
+        serializer = self.get_serializer(recent, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def failed_payments(self, request):
+        """Get failed payments for admin review"""
+        failed = self.get_queryset().filter(status='failed')
+        serializer = self.get_serializer(failed, many=True)
+        return Response(serializer.data)
+
 
 class RefundRequestViewSet(viewsets.ModelViewSet):
     """ViewSet for managing refund requests (Manual refund processing)"""
