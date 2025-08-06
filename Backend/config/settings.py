@@ -106,7 +106,11 @@ AUTH_USER_MODEL = 'accounts.User'
 if env('DATABASE_URL', default=None):
     # Production/Deployed - use environment DATABASE_URL
     DATABASES = {
-        'default': dj_database_url.parse(env('DATABASE_URL'))
+        'default': dj_database_url.config(
+        default=env('DATABASE_URL'),
+        conn_max_age=600,  # Connection reuse
+        engine='dj_db_conn_pool.backends.postgresql'  # Pooled engine
+    )
     }
 else:
     # Local development - use local PostgreSQL
@@ -222,7 +226,7 @@ CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
 CORS_ALLOW_CREDENTIALS = True
 
 # Celery Configuration
-REDIS_URL = env("REDIS_URL", "redis://localhost:6379")
+REDIS_URL = env("REDIS_URL", default="redis://localhost:6379")
 
 CELERY_BROKER_URL = CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_TASK_ALWAYS_EAGER = False
