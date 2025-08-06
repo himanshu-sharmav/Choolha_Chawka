@@ -106,7 +106,11 @@ AUTH_USER_MODEL = 'accounts.User'
 if env('DATABASE_URL', default=None):
     # Production/Deployed - use environment DATABASE_URL
     DATABASES = {
-        'default': dj_database_url.parse(env('DATABASE_URL'))
+        'default': dj_database_url.config(
+        default=env('DATABASE_URL'),
+        conn_max_age=600,  # Connection reuse
+        engine='dj_db_conn_pool.backends.postgresql'  # Pooled engine
+    )
     }
 else:
     # Local development - use local PostgreSQL
@@ -115,7 +119,7 @@ else:
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': env('DB_NAME', default='ChoolaChawka_dev'),
             'USER': env('DB_USER', default='postgres'),
-            'PASSWORD': env('DB_PASSWORD', default='postgres_password'),
+            'PASSWORD': env('DB_PASSWORD', default='Himan123@'),
             'HOST': env('DB_HOST', default='localhost'),
             'PORT': env('DB_PORT', default='5432'),
         }
@@ -220,6 +224,13 @@ CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
 
 ])
 CORS_ALLOW_CREDENTIALS = True
+
+# Celery Configuration
+REDIS_URL = env("REDIS_URL", default="redis://localhost:6379")
+
+CELERY_BROKER_URL = CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_TASK_ALWAYS_EAGER = False
+
 # Twilio settings
 TWILIO_ACCOUNT_SID = env('TWILIO_ACCOUNT_SID')
 TWILIO_AUTH_TOKEN = env('TWILIO_AUTH_TOKEN')
