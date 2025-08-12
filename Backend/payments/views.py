@@ -200,6 +200,8 @@ class RazorpayOrderViewSet(viewsets.ModelViewSet):
                 'subscription_id': subscription.id,
                 'user': {
                     'name': request.user.get_full_name() or request.user.username,
+                    'first_name': request.user.first_name,
+                    'last_name': request.user.last_name,
                     'email': request.user.email,
                     'phone': request.user.phone,
                 }

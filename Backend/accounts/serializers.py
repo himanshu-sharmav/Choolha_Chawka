@@ -13,10 +13,29 @@ User = get_user_model()
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    # Allow passing email as an alternative login field
+    email = serializers.CharField(required=False, write_only=True)
+
     def validate(self, attrs):
+        # Accept email or username in the username field
+        identifier = attrs.get(self.username_field) or attrs.get('email')
+
+        if identifier:
+            # If identifier looks like an email, try to resolve to username
+            try:
+                if '@' in identifier:
+                    user_obj = User.objects.get(email__iexact=identifier)
+                    attrs[self.username_field] = user_obj.get_username()
+                else:
+                    # identifier already presumed to be username
+                    attrs[self.username_field] = identifier
+            except User.DoesNotExist:
+                # Fall through; super() will handle invalid credentials response
+                attrs[self.username_field] = identifier
+
         data = super().validate(attrs)
-        data['status'] = self.user.status  
-        data['user_type'] = self.user.user_type 
+        data['status'] = self.user.status
+        data['user_type'] = self.user.user_type
         return data
 
 

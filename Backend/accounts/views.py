@@ -55,6 +55,14 @@ class UserRegistrationView(APIView):
                     'success': False,
                     'message': 'Phone number already registered'
                 }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if email is already registered
+            email = serializer.validated_data.get('email')
+            if email and User.objects.filter(email=email).exists():
+                return Response({
+                    'success': False,
+                    'message': 'Email already registered'
+                }, status=status.HTTP_400_BAD_REQUEST)
                 
             # Check if we can send OTP to this phone
             if not OTPThrottle.can_send_otp(phone):
@@ -250,6 +258,18 @@ class CompleteProfileView(APIView):
             # Handle customer types (existing logic)
             user.is_tiffin_user = data.get('is_tiffin_user', user.is_tiffin_user)
             user.is_mess_user = data.get('is_mess_user', user.is_mess_user)
+
+            # Enforce mutual exclusivity and at least one selected
+            if user.is_tiffin_user and user.is_mess_user:
+                return Response({
+                    'success': False,
+                    'message': 'Please select only one service preference: either Tiffin or Mess.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            if not user.is_tiffin_user and not user.is_mess_user:
+                return Response({
+                    'success': False,
+                    'message': 'Please select at least one service preference (Tiffin or Mess) to complete your profile.'
+                }, status=status.HTTP_400_BAD_REQUEST)
             user.preferred_delivery_time = data.get('preferred_delivery_time', user.preferred_delivery_time)
             
             if user.user_type == 'student':
@@ -353,10 +373,27 @@ class UpdateProfileView(APIView):
             if field in data:
                 setattr(user, field, data[field])
         
-        # Handle email updates (might need verification)
+        # Enforce mutual exclusivity for service preference when updating
+        incoming_has_tiffin = 'is_tiffin_user' in data
+        incoming_has_mess = 'is_mess_user' in data
+        new_is_tiffin = data.get('is_tiffin_user', user.is_tiffin_user)
+        new_is_mess = data.get('is_mess_user', user.is_mess_user)
+        if (incoming_has_tiffin or incoming_has_mess) and new_is_tiffin and new_is_mess:
+            return Response({
+                'success': False,
+                'message': 'Please select only one service preference: either Tiffin or Mess.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Handle email updates (might need verification) with duplicate check
         if 'email' in data and data['email'] != user.email:
+            new_email = data['email']
+            if new_email and User.objects.filter(email=new_email).exclude(pk=user.pk).exists():
+                return Response({
+                    'success': False,
+                    'message': 'Email already registered'
+                }, status=status.HTTP_400_BAD_REQUEST)
             # You might want to add email verification logic here
-            user.email = data['email']
+            user.email = new_email
             # user.email_verified = False  # If you have this field
         
         # Handle phone updates (might need verification)
