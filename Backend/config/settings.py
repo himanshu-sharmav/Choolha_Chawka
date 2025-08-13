@@ -102,28 +102,47 @@ AUTH_USER_MODEL = 'accounts.User'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 
-# Database Configuration - Environment-based
+# Database Configuration - CORRECTED
 if env('DATABASE_URL', default=None):
-    # Production/Deployed - use environment DATABASE_URL
+    # Production/Deployed
     DATABASES = {
         'default': dj_database_url.config(
-        default=env('DATABASE_URL'),
-        conn_max_age=600,  # Connection reuse
-        engine='dj_db_conn_pool.backends.postgresql'  # Pooled engine
-    )
+            default=env('DATABASE_URL'),
+            conn_max_age=600,
+            engine='dj_db_conn_pool.backends.postgresql'
+        )
     }
+    
+    # Fixed PostgreSQL options
+    DATABASES['default']['OPTIONS'] = {
+        'sslmode': 'require',
+        'connect_timeout': 10,
+    }
+    
+    DATABASES['default']['ATOMIC_REQUESTS'] = True
+    
 else:
-    # Local development - use local PostgreSQL
-    DATABASES = { 
+    # Local development
+    DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.postgresql',
+            'ENGINE': 'dj_db_conn_pool.backends.postgresql',
             'NAME': env('DB_NAME', default='ChoolaChawka_dev'),
             'USER': env('DB_USER', default='postgres'),
             'PASSWORD': env('DB_PASSWORD', default='Himan123@'),
             'HOST': env('DB_HOST', default='localhost'),
             'PORT': env('DB_PORT', default='5432'),
+            'CONN_MAX_AGE': 300,
+            'ATOMIC_REQUESTS': True,
+            'OPTIONS': {
+                'connect_timeout': 5,
+            }
         }
     }
+
+
+# Additional database optimizations
+DATABASE_CONN_HEALTH_CHECKS = True
+DATABASE_CONN_MAX_AGE_JITTER = 60  # Add jitter to prevent connection storms
 
 
 MEDIA_URL = '/media/'
