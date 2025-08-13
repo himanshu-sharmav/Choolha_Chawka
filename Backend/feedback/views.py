@@ -196,7 +196,7 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
             serializer.save()
             
             # Clear dashboard cache after status update
-            self._clear_dashboard_cache()
+            # self._clear_dashboard_cache()
             
             return Response({
                 'success': True,
