@@ -48,6 +48,30 @@ class SubscriptionCreateSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         plan = data['plan']
         
+        # 0. Ensure user profile is complete and service type matches preference
+        # Require profile completion for customers
+        if getattr(user, 'user_type', None) in ['student', 'regular']:
+            if getattr(user, 'status', '') != 'profile_complete':
+                raise serializers.ValidationError(
+                    'Please complete your profile before subscribing to a plan.'
+                )
+
+            # Enforce that only one of the flags is true in case of inconsistent data
+            if getattr(user, 'is_tiffin_user', False) and getattr(user, 'is_mess_user', False):
+                raise serializers.ValidationError(
+                    'Your profile has both Tiffin and Mess selected. Please update your profile to select only one.'
+                )
+
+            # Match plan service type to user's selected preference
+            if plan.service_type == 'tiffin' and not getattr(user, 'is_tiffin_user', False):
+                raise serializers.ValidationError(
+                    'You have not selected Tiffin service in your profile. Update your profile to subscribe to Tiffin plans.'
+                )
+            if plan.service_type == 'mess' and not getattr(user, 'is_mess_user', False):
+                raise serializers.ValidationError(
+                    'You have not selected Mess service in your profile. Update your profile to subscribe to Mess plans.'
+                )
+
         # 1. Prevent multiple active subscriptions for same plan
         existing_active = Subscription.objects.filter(
             user=user,
