@@ -174,7 +174,7 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
             feedback.save()
             
             # Clear dashboard cache after responding
-            self._clear_dashboard_cache()
+            # self._clear_dashboard_cache()
             
             return Response({
                 'success': True,
