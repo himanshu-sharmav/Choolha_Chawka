@@ -75,3 +75,4 @@ django-cloudinary-storage==0.3.0
 celery==5.3.4
 redis==5.0.1
 django-db-connection-pool==1.2.4
+django-redis==5.4.0

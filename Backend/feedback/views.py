@@ -9,6 +9,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from django.core.cache import cache
 from core.permissions import IsCustomer, IsMessOwner
+from core.cache_service import cache_get, ListRetrieveCacheMixin
 from .models import Feedback, FeedbackAttachment
 from .serializers import (
     FeedbackSerializer, FeedbackCreateSerializer, FeedbackAttachmentSerializer,
@@ -16,7 +17,7 @@ from .serializers import (
 )
 from notifications.services import NotificationService
 
-class FeedbackViewSet(viewsets.ModelViewSet):
+class FeedbackViewSet(ListRetrieveCacheMixin, viewsets.ModelViewSet):
     """ViewSet for customer feedback management"""
     serializer_class = FeedbackSerializer
     permission_classes = [IsCustomer]
@@ -126,6 +127,7 @@ class FeedbackViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_404_NOT_FOUND)
     
     @action(detail=False, methods=['get'])
+    @cache_get()
     def my_stats(self, request):
         """Get user's feedback statistics"""
         user_feedbacks = self.get_queryset()
@@ -145,7 +147,7 @@ class FeedbackViewSet(viewsets.ModelViewSet):
 
 
 
-class AdminFeedbackViewSet(viewsets.ModelViewSet):
+class AdminFeedbackViewSet(ListRetrieveCacheMixin, viewsets.ModelViewSet):
     """Optimized ViewSet for admin feedback management with caching"""
     serializer_class = FeedbackSerializer
     permission_classes = [IsMessOwner]
@@ -207,6 +209,7 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=False, methods=['get'])
+    @cache_get()
     def dashboard_stats(self, request):
         """Optimized dashboard statistics with caching"""
         # Check cache first
@@ -264,6 +267,7 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
         return Response(stats)
     
     @action(detail=False, methods=['get'])
+    @cache_get()
     def urgent_complaints(self, request):
         """Cached urgent complaints"""
         cache_key = 'urgent_complaints'
@@ -282,6 +286,7 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
         return Response(complaints)
     
     @action(detail=False, methods=['get'])
+    @cache_get()
     def pending_responses(self, request):
         """Get feedbacks pending admin response - cached"""
         cache_key = 'pending_responses'
@@ -299,6 +304,7 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
         return Response(pending)
     
     @action(detail=False, methods=['get'])
+    @cache_get()
     def recent_activity(self, request):
         """Get recent feedback activity for dashboard - cached"""
         cache_key = 'recent_activity'
@@ -315,6 +321,7 @@ class AdminFeedbackViewSet(viewsets.ModelViewSet):
         return Response(recent)
     
     @action(detail=False, methods=['get'])
+    @cache_get()
     def priority_summary(self, request):
         """Optimized priority summary with single query"""
         cache_key = 'feedback_priority_summary'

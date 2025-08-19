@@ -35,6 +35,7 @@ from .models import User
 from .serializers import UserDetailSerializer, UserListSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import CustomTokenObtainPairSerializer
+from core.cache_service import cache_get, ListRetrieveCacheMixin
 
 
 User = get_user_model()
@@ -212,6 +213,7 @@ class LogoutView(APIView):
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
     
+    @cache_get()
     def get(self, request):
         serializer = UserProfileSerializer(request.user)
         return Response(serializer.data)
@@ -528,7 +530,7 @@ class ChangePasswordView(APIView):
 
 
 
-class OwnerUserViewSet(viewsets.ReadOnlyModelViewSet):
+class OwnerUserViewSet(ListRetrieveCacheMixin, viewsets.ReadOnlyModelViewSet):
     """ViewSet for mess owners to view all users"""
     permission_classes = [IsMessOwner]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -549,6 +551,7 @@ class OwnerUserViewSet(viewsets.ReadOnlyModelViewSet):
         return UserDetailSerializer
     
     @action(detail=False, methods=['get'])
+    @cache_get()
     def active_subscribers(self, request):
         """Get users with active subscriptions, now with meal filtering."""
         from subscriptions.models import Subscription
@@ -565,6 +568,7 @@ class OwnerUserViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
+    @cache_get()
     def user_stats(self, request):
         """Get user statistics for dashboard"""
         queryset = self.get_queryset()
