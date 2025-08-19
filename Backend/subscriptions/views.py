@@ -15,8 +15,9 @@ from notifications.services import (
     send_leave_approved_email, send_leave_rejected_email, send_new_user_joined_email,send_subscription_cancelled_email,send_subscription_renewed_email
 )
 from payments.models import RefundRequest,Payment
+from core.cache_service import cache_get, ListRetrieveCacheMixin
 
-class PlanViewSet(viewsets.ModelViewSet):
+class PlanViewSet(ListRetrieveCacheMixin, viewsets.ModelViewSet):
     """ViewSet for listing, retrieving, creating, updating, and deleting plans"""
     queryset = Plan.objects.all()
     serializer_class = PlanSerializer
@@ -102,7 +103,7 @@ class PlanViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_204_NO_CONTENT)
 
 
-class SubscriptionViewSet(viewsets.ModelViewSet):
+class SubscriptionViewSet(ListRetrieveCacheMixin, viewsets.ModelViewSet):
     """ViewSet for managing user subscriptions"""
     serializer_class = SubscriptionSerializer
     permission_classes = [IsCustomer]  # Only customers can create subscriptions
@@ -189,6 +190,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         })
     
     @action(detail=False, methods=['get'])
+    @cache_get()
     def active(self, request):
         """Get user's active subscription"""
         active_subscription = self.get_queryset().filter(status='ACTIVE').first()
@@ -249,7 +251,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
 
 
-class LeaveViewSet(viewsets.ModelViewSet):
+class LeaveViewSet(ListRetrieveCacheMixin, viewsets.ModelViewSet):
     """ViewSet for managing leave requests"""
     permission_classes = [IsAuthenticated]
     
@@ -353,6 +355,7 @@ class LeaveViewSet(viewsets.ModelViewSet):
         })
     
     @action(detail=False, methods=['get'], permission_classes=[IsMessOwner])
+    @cache_get()
     def pending(self, request):
         """Get all pending leave requests (Mess Owner only)"""
         pending_leaves = self.get_queryset().filter(status='PENDING')
@@ -360,6 +363,7 @@ class LeaveViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'], permission_classes=[IsMessOwner])
+    @cache_get()
     def dashboard_stats(self, request):
         """Get dashboard statistics (Mess Owner only)"""
         queryset = self.get_queryset()

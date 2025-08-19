@@ -304,3 +304,14 @@ WHITENOISE_USE_FINDERS = True
 
 FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:5173')  # Placeholder URL
 # WHITENOISE_USE_FINDERS = True
+
+# Cache configuration (Redis backed)
+CACHE_TTL = env.int('CACHE_TTL', default=120)  # seconds
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': env('REDIS_URL', default='redis://127.0.0.1:6379/1'),
+        'TIMEOUT': env.int('CACHE_DEFAULT_TIMEOUT', default=300),
+        'KEY_PREFIX': env('CACHE_KEY_PREFIX', default='cc'),
+    }
+}
