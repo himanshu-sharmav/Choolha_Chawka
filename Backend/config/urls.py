@@ -48,6 +48,7 @@ urlpatterns = [
     path('api/payments/', include('payments.urls')),
     path('api/notifications/', include('notifications.urls')),
     path('api/feedback/', include('feedback.urls')),
+    path('api/core/', include('core.urls')),  # Add core URLs
      # Mess owner dashboard APIs
     path('api/owner/', include('owner.urls')),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
