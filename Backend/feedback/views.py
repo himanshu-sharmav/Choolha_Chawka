@@ -157,6 +157,7 @@ class AdminFeedbackViewSet(ListRetrieveCacheMixin, viewsets.ModelViewSet):
     search_fields = ['subject', 'message', 'user__username', 'user__email']
     ordering_fields = ['created_at', 'priority', 'status', 'responded_at']
     ordering = ['-priority', '-created_at']
+    cache_ttl = 60
     
     class AdminDefaultPagination(PageNumberPagination):
         page_size = 50

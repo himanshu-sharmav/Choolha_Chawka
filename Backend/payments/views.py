@@ -256,6 +256,7 @@ class AdminPaymentViewSet(ListRetrieveCacheMixin, viewsets.ReadOnlyModelViewSet)
     search_fields = ['transaction_id', 'user__username', 'user__email', 'user__phone']
     ordering_fields = ['created_at', 'amount', 'status']
     ordering = ['-created_at']
+    cache_ttl = 60
     
     class AdminDefaultPagination(PageNumberPagination):
         page_size = 50

@@ -1,5 +1,6 @@
 from functools import wraps
 from typing import Callable, Optional
+import logging
 
 from django.conf import settings
 from django.core.cache import cache
@@ -7,6 +8,8 @@ from django.http import HttpRequest
 from rest_framework.response import Response
 
 from .cache_utils import build_cache_key, get_cache_ttl
+
+logger = logging.getLogger('app')
 
 
 def cache_get(ttl: Optional[int] = None, *, vary_on_user: bool = True, namespace: Optional[str] = None):
@@ -32,14 +35,17 @@ def cache_get(ttl: Optional[int] = None, *, vary_on_user: bool = True, namespace
 
             cached = cache.get(cache_key)
             if cached is not None:
+                logger.info(f"cache hit ns={ns} path={request.path}")
                 return Response(cached.get("data"), status=cached.get("status", 200))
 
             response = view_func(self, request, *args, **kwargs)
             try:
                 payload = {"data": getattr(response, "data", None), "status": response.status_code}
                 cache.set(cache_key, payload, timeout=get_cache_ttl(ttl))
+                logger.info(f"cache set ns={ns} path={request.path} ttl={get_cache_ttl(ttl)}")
             except Exception:
                 # Do not break the request if caching fails
+                logger.warning(f"cache set failed ns={ns} path={request.path}")
                 pass
             return response
 
@@ -75,13 +81,16 @@ class ListRetrieveCacheMixin:
         cache_key = self._build_key(request, "list")
         cached = cache.get(cache_key)
         if cached is not None:
+            logger.info(f"cache hit ns={self.__class__.__name__}:list path={request.path}")
             return Response(cached.get("data"), status=cached.get("status", 200))
 
         response = super().list(request, *args, **kwargs)
         try:
             payload = {"data": getattr(response, "data", None), "status": response.status_code}
             cache.set(cache_key, payload, timeout=get_cache_ttl(self.cache_ttl))
+            logger.info(f"cache set ns={self.__class__.__name__}:list path={request.path} ttl={get_cache_ttl(self.cache_ttl)}")
         except Exception:
+            logger.warning(f"cache set failed ns={self.__class__.__name__}:list path={request.path}")
             pass
         return response
 
@@ -92,13 +101,16 @@ class ListRetrieveCacheMixin:
         cache_key = self._build_key(request, "retrieve")
         cached = cache.get(cache_key)
         if cached is not None:
+            logger.info(f"cache hit ns={self.__class__.__name__}:retrieve path={request.path}")
             return Response(cached.get("data"), status=cached.get("status", 200))
 
         response = super().retrieve(request, *args, **kwargs)
         try:
             payload = {"data": getattr(response, "data", None), "status": response.status_code}
             cache.set(cache_key, payload, timeout=get_cache_ttl(self.cache_ttl))
+            logger.info(f"cache set ns={self.__class__.__name__}:retrieve path={request.path} ttl={get_cache_ttl(self.cache_ttl)}")
         except Exception:
+            logger.warning(f"cache set failed ns={self.__class__.__name__}:retrieve path={request.path}")
             pass
         return response
 
