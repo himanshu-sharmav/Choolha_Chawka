@@ -255,6 +255,7 @@ class AdminPaymentViewSet(ListRetrieveCacheMixin, viewsets.ReadOnlyModelViewSet)
     ordering_fields = ['created_at', 'amount', 'status']
     ordering = ['-created_at']
     
+    @cache_get()
     def get_queryset(self):
         return Payment.objects.select_related(
             'user', 'subscription', 'subscription__plan'
