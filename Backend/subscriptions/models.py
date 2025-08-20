@@ -129,6 +129,12 @@ class Subscription(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['plan', 'status']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['adjusted_end_date']),
+        ]
 
 class Leave(models.Model):
     STATUS_CHOICES = [
