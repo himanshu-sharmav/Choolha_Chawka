@@ -317,6 +317,7 @@ CACHES = {
         'KEY_PREFIX': env('CACHE_KEY_PREFIX', default='cc'),
     }
 }
+NOTIFICATIONS_ASYNC = False
 
 # Logging configuration
 LOG_LEVEL = env('LOG_LEVEL', default='INFO')
