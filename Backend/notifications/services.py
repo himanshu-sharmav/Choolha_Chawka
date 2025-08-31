@@ -36,8 +36,10 @@ try:
         async_send_security_alert_sms,
     )
     _ASYNC = True
-except Exception:  # Celery not running, tests, etc.
+    logger.info("✅ Celery tasks imported successfully - ASYNC mode enabled")
+except Exception as e:
     _ASYNC = False
+    logger.warning(f"❌ Celery tasks import failed - SYNC mode enabled. Error: {str(e)}")
 
 class NotificationService:
     
@@ -49,13 +51,23 @@ class NotificationService:
         Args:
             user: User object
             template_name: Template name (e.g., 'welcome', 'payment_success')
-            context_data: Additional context for template
+            context_ Additional context for template
             recipient_email: Override email (optional)
             recipient_phone: Override phone (optional)
             channel: 'email', 'sms', or 'both'
         """
-        print(f"🔥 NotificationService called: {template_name} for {user.email}")
+        logger.info(f"🔥 NotificationService called: {template_name} for {user.email}")
+        logger.info(f"🎯 Channel: {channel}, _ASYNC: {_ASYNC}")
+        
         try:
+            # Debug email configuration first
+            logger.info("🔧 EMAIL CONFIGURATION:")
+            logger.info(f"📧 EMAIL_HOST: {getattr(settings, 'EMAIL_HOST', 'NOT SET')}")
+            logger.info(f"🔌 EMAIL_PORT: {getattr(settings, 'EMAIL_PORT', 'NOT SET')}")
+            logger.info(f"👤 EMAIL_HOST_USER: {getattr(settings, 'EMAIL_HOST_USER', 'NOT SET')[:10]}...")
+            logger.info(f"📨 DEFAULT_FROM_EMAIL: {getattr(settings, 'DEFAULT_FROM_EMAIL', 'NOT SET')}")
+            logger.info(f"🔒 EMAIL_USE_TLS: {getattr(settings, 'EMAIL_USE_TLS', 'NOT SET')}")
+            
             context_data = context_data or {}
             context_data.update({
                 'user': user,
@@ -74,32 +86,44 @@ class NotificationService:
             
             # Send Email (HTML-only)
             if channel in ['email', 'both'] and email:
-                print(f"📧 Attempting to send email to {email}")
+                logger.info(f"📧 Attempting to send email to {email}")
                 try:
+                    logger.info(f"📝 Rendering templates for {template_name}")
+                    
                     # Render subject and HTML template
                     subject = render_to_string(
                         f'notifications/subjects/{template_name}.txt', 
                         context_data
                     ).strip()
+                    logger.info(f"📋 Subject rendered: {subject}")
                     
                     html_message = render_to_string(
                         f'notifications/email/{template_name}.html', 
                         context_data
                     )
+                    logger.info(f"🎨 HTML template rendered successfully, length: {len(html_message)}")
                     
                     # Auto-generate plain text from HTML
                     text_message = strip_tags(html_message)
+                    logger.info(f"📄 Plain text version generated, length: {len(text_message)}")
                     
                     # Use EmailMultiAlternatives for better email support
+                    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com')
+                    logger.info(f"📤 Creating email message from {from_email} to {email}")
+                    
                     msg = EmailMultiAlternatives(
                         subject=subject,
                         body=text_message,  # Fallback plain text
-                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        from_email=from_email,
                         to=[email]
                     )
                     msg.attach_alternative(html_message, "text/html")
-                    msg.send()
-                    print(f"✅ Email sent successfully to {email}")
+                    logger.info("📨 Email message created successfully")
+                    
+                    logger.info("🚀 Sending email...")
+                    result = msg.send()
+                    logger.info(f"✅ Email sent successfully! Result: {result}")
+                    
                     # Log successful email
                     NotificationLog.objects.create(
                         user=user,
@@ -109,39 +133,52 @@ class NotificationService:
                         subject=subject,
                         status='sent'
                     )
+                    logger.info("📊 NotificationLog created for successful email")
                     
                 except Exception as e:
-                    print(f"❌ Email failed: {e}")
-                    logger.error(f"Email notification failed for {template_name}: {str(e)}")
+                    logger.error(f"❌ Email failed: {str(e)}")
+                    logger.error(f"📍 Email error traceback:")
+                    import traceback
+                    logger.error(traceback.format_exc())
+                    
                     error_message += f"Email failed: {str(e)}; "
                     success = False
                     
                     # Log failed email
-                    NotificationLog.objects.create(
-                        user=user,
-                        notification_type=template_name,
-                        channel='email',
-                        recipient_email=email,
-                        status='failed',
-                        error_message=str(e)
-                    )
+                    try:
+                        NotificationLog.objects.create(
+                            user=user,
+                            notification_type=template_name,
+                            channel='email',
+                            recipient_email=email,
+                            status='failed',
+                            error_message=str(e)
+                        )
+                        logger.info("📊 NotificationLog created for failed email")
+                    except Exception as log_error:
+                        logger.error(f"❌ Failed to create NotificationLog: {log_error}")
             
             # Send SMS (Auth only)
             if channel in ['sms', 'both'] and phone:
+                logger.info(f"📱 Attempting to send SMS to {phone}")
                 try:
                     sms_message = render_to_string(
                         f'notifications/sms/{template_name}.txt', 
                         context_data
                     ).strip()
+                    logger.info(f"💬 SMS message rendered: {sms_message}")
                     
                     sms_response = send_sms(phone, sms_message)
+                    logger.info(f"📲 SMS response: {sms_response}")
                     
                     if sms_response.get('success'):
                         status = 'sent'
+                        logger.info("✅ SMS sent successfully")
                     else:
                         status = 'failed'
                         error_message += f"SMS failed: {sms_response.get('error', 'Unknown error')}; "
                         success = False
+                        logger.error(f"❌ SMS failed: {sms_response.get('error', 'Unknown error')}")
                     
                     # Log SMS notification
                     NotificationLog.objects.create(
@@ -154,24 +191,30 @@ class NotificationService:
                     )
                     
                 except Exception as e:
-                    logger.error(f"SMS notification failed for {template_name}: {str(e)}")
+                    logger.error(f"❌ SMS notification failed for {template_name}: {str(e)}")
                     error_message += f"SMS failed: {str(e)}; "
                     success = False
             
+            logger.info(f"🏁 NotificationService completed. Success: {success}, Error: {error_message}")
             return success, error_message
             
         except Exception as e:
-            logger.error(f"Notification service error for {template_name}: {str(e)}")
+            logger.error(f"💥 Critical error in NotificationService for {template_name}: {str(e)}")
+            logger.error(f"📍 Critical error traceback:")
+            import traceback
+            logger.error(traceback.format_exc())
             return False, str(e)
-    
-    # Specific notification methods (unchanged - these are used by Celery tasks)
+
     @staticmethod
     def send_welcome_email(user):
         """Send welcome email when user first registers"""
+        logger.info(f"🎉 send_welcome_email called for {user.email}")
         context = {
             'login_url': f"{settings.FRONTEND_URL}/login",
         }
         return NotificationService.send_notification(user, 'welcome', context)
+    
+
     
     @staticmethod
     def send_profile_complete_email(user):
@@ -546,3 +589,45 @@ def send_security_alert_sms(user, alert_message):
         async_send_security_alert_sms.delay(user.id, alert_message)
         return True, ""
     return NotificationService.send_security_alert_sms(user, alert_message)
+
+
+
+
+from notifications.services import NotificationService
+from accounts.models import User
+
+try:
+    user = User.objects.filter(email='himanshusharma.dev80@gmail.com').first()
+    if user:
+        success, error = NotificationService.send_notification(
+            user=user,
+            template_name='welcome',  
+            channel='email'
+        )
+        print(f"Notification service result: Success={success}, Error={error}")
+    else:
+        print("User not found - create a test user first")
+except Exception as e:
+    print(f"Notification service error: {e}")
+    import traceback
+    traceback.print_exc()
+
+
+from django.conf import settings
+
+async_enabled = getattr(settings, 'NOTIFICATIONS_ASYNC', getattr(settings, '_ASYNC', False))
+print(f"Async notifications enabled: {async_enabled}")
+
+try:
+    from notifications.tasks import async_send_welcome_email
+    
+    task = async_send_welcome_email.delay(user.id)
+    print(f"Celery task queued: {task.id}")
+    
+    print(f"Task status: {task.status}")
+except ImportError:
+    print("No async email tasks found - emails will be synchronous")
+except Exception as e:
+    print(f"Celery task error: {e}")
+
+
