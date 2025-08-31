@@ -14,7 +14,7 @@ try:
     from celery import current_app
     # Check if Celery is properly configured
     if hasattr(current_app, 'conf') and current_app.conf.broker_url:
-        _ASYNC = getattr(settings, 'NOTIFICATIONS_ASYNC', True)
+        _ASYNC = getattr(settings, 'NOTIFICATIONS_ASYNC', False)
         logger.info(f"✅ Celery detected - ASYNC mode enabled: {_ASYNC}")
     else:
         _ASYNC = False
