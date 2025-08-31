@@ -36,7 +36,10 @@ from .serializers import UserDetailSerializer, UserListSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import CustomTokenObtainPairSerializer
 from core.cache_service import cache_get, ListRetrieveCacheMixin
+import logging
 
+# Add logger at the top
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -99,11 +102,15 @@ class VerifyOTPView(APIView):
         phone = request.data.get('phone')
         otp = request.data.get('otp')
         
+        logger.info(f"🚀 OTP verification started for phone: {phone}")
+        
         try:
             user = User.objects.get(phone=phone)
+            logger.info(f"📱 User found: {user.email}, status: {user.status}")
             
             # Check for too many attempts
             if not OTPVerificationAttempt.check_attempts(user):
+                logger.warning(f"⚠️ Too many failed attempts for user {user.email}")
                 return Response({
                     'success': False,
                     'message': 'Too many failed attempts. Please try again later.'
@@ -113,26 +120,33 @@ class VerifyOTPView(APIView):
             attempt = OTPVerificationAttempt(user=user)
             
             # Verify OTP
+            logger.info(f"🔐 Verifying OTP for user {user.email}")
             is_valid, message = user.verify_otp(otp)
             attempt.successful = is_valid
             attempt.save()
             
             if is_valid:
-                # Create auth token
-                # token, created = Token.objects.get_or_create(user=user)
-                 # Create JWT tokens
+                logger.info(f"✅ OTP validation successful for user {user.email}")
+                
+                # Create JWT tokens
                 refresh = RefreshToken.for_user(user)
                 access_token = str(refresh.access_token)
                 refresh_token = str(refresh)
                 
-                 # Send welcome email for first-time phone verification
+                # Send welcome email for first-time phone verification
                 if user.status in ['registration_complete', 'profile_complete']:
+                    logger.info(f"📧 About to send welcome email to {user.email} (status: {user.status})")
                     try:
                         send_welcome_email(user)
+                        logger.info(f"✅ Welcome email sent successfully to {user.email}")
                     except Exception as e:
-                        # Log error but don't fail the verification
-                        print(f"Failed to send welcome email: {e}")
+                        logger.error(f"❌ Failed to send welcome email to {user.email}: {str(e)}")
+                        import traceback
+                        logger.error(f"📍 Welcome email error traceback: {traceback.format_exc()}")
+                else:
+                    logger.info(f"ℹ️ Skipping welcome email - user status: {user.status}")
 
+                logger.info(f"🏁 OTP verification completed for {user.email}")
                 return Response({
                     'success': True,
                     'message': message,
@@ -141,16 +155,26 @@ class VerifyOTPView(APIView):
                     'user': UserProfileSerializer(user).data
                 })
             else:
+                logger.warning(f"❌ OTP validation failed for user {user.email}: {message}")
                 return Response({
                     'success': False,
                     'message': message
                 }, status=status.HTTP_400_BAD_REQUEST)
                 
         except User.DoesNotExist:
+            logger.error(f"🔍 User not found for phone: {phone}")
             return Response({
                 'success': False,
                 'message': 'Invalid phone number'
             }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"💥 Unexpected error in OTP verification: {str(e)}")
+            import traceback
+            logger.error(f"📍 Unexpected error traceback: {traceback.format_exc()}")
+            return Response({
+                'success': False,
+                'message': 'An error occurred during verification'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ResendOTPView(APIView):
     permission_classes = [AllowAny]
@@ -225,6 +249,8 @@ class CompleteProfileView(APIView):
     def post(self, request):
         user = request.user
         data = request.data
+        
+        logger.info(f"📝 Profile completion started for user {user.email}")
         
          # Track if profile was completed in this request
         was_profile_incomplete = user.status != 'profile_complete'
@@ -339,12 +365,16 @@ class CompleteProfileView(APIView):
 
         # Send profile complete email if profile was just completed
         if was_profile_incomplete and user.status == 'profile_complete':
+            logger.info(f"📧 About to send profile complete email to {user.email}")
             try:
                 send_profile_complete_email(user)
+                logger.info(f"✅ Profile complete email sent successfully to {user.email}")
             except Exception as e:
-                # Log error but don't fail the profile completion
-                print(f"Failed to send profile complete email: {e}")
+                logger.error(f"❌ Failed to send profile complete email to {user.email}: {str(e)}")
+                import traceback
+                logger.error(f"📍 Profile email error traceback: {traceback.format_exc()}")
         
+        logger.info(f"🏁 Profile completion finished for user {user.email}")
         return Response({
             'success': True,
             'message': 'Profile updated successfully',
@@ -415,7 +445,7 @@ class UpdateProfileView(APIView):
                         setattr(profile, field, student_data[field])
                 profile.save()
         
-        elif user.user_type == 'regular' and 'regular_profile' in data:
+        elif user.user_type == 'regular' and 'regular_profile' in data: 
             regular_data = data['regular_profile']
             if hasattr(user, 'regular_profile'):
                 profile = user.regular_profile
@@ -472,6 +502,7 @@ class PasswordResetRequestView(APIView):
                 'message': 'Password reset email sent successfully'
             })
         except Exception as e:
+            logger.error(f"❌ Failed to send password reset email: {str(e)}")
             return Response({
                 'success': False,
                 'message': 'Failed to send password reset email'
@@ -494,8 +525,9 @@ class PasswordResetConfirmView(APIView):
         # Send confirmation email
         try:
             send_password_changed_email(user)
+            logger.info(f"✅ Password changed email sent to {user.email}")
         except Exception as e:
-            print(f"Failed to send password changed email: {e}")
+            logger.error(f"❌ Failed to send password changed email to {user.email}: {str(e)}")
         
         return Response({
             'success': True,
@@ -519,8 +551,9 @@ class ChangePasswordView(APIView):
         # Send confirmation email
         try:
             send_password_changed_email(user)
+            logger.info(f"✅ Password changed email sent to {user.email}")
         except Exception as e:
-            print(f"Failed to send password changed email: {e}")
+            logger.error(f"❌ Failed to send password changed email to {user.email}: {str(e)}")
         
         return Response({
             'success': True,
