@@ -593,41 +593,4 @@ def send_security_alert_sms(user, alert_message):
 
 
 
-from notifications.services import NotificationService
-from accounts.models import User
-
-try:
-    user = User.objects.filter(email='himanshusharma.dev80@gmail.com').first()
-    if user:
-        success, error = NotificationService.send_notification(
-            user=user,
-            template_name='welcome',  
-            channel='email'
-        )
-        print(f"Notification service result: Success={success}, Error={error}")
-    else:
-        print("User not found - create a test user first")
-except Exception as e:
-    print(f"Notification service error: {e}")
-    import traceback
-    traceback.print_exc()
-
-
-from django.conf import settings
-
-async_enabled = getattr(settings, 'NOTIFICATIONS_ASYNC', getattr(settings, '_ASYNC', False))
-print(f"Async notifications enabled: {async_enabled}")
-
-try:
-    from notifications.tasks import async_send_welcome_email
-    
-    task = async_send_welcome_email.delay(user.id)
-    print(f"Celery task queued: {task.id}")
-    
-    print(f"Task status: {task.status}")
-except ImportError:
-    print("No async email tasks found - emails will be synchronous")
-except Exception as e:
-    print(f"Celery task error: {e}")
-
 
