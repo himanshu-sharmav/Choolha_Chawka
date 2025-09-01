@@ -9,37 +9,19 @@ from .models import NotificationLog
 
 logger = logging.getLogger(__name__)
 
-# Try to import Celery tasks; fall back to sync mode in unit tests
+# Fix circular import - check for Celery availability without importing tasks
 try:
-    from notifications.tasks import (
-        async_send_welcome_email,
-        async_send_profile_complete_email,
-        async_send_subscription_created_email,
-        async_send_payment_success_email,
-        async_send_payment_failed_email,
-        async_send_leave_submitted_email,
-        async_send_leave_approved_email,
-        async_send_leave_rejected_email,
-        async_send_subscription_cancelled_email,
-        async_send_subscription_expiring_email,
-        async_send_subscription_expired_email,
-        async_send_subscription_renewed_email,
-        async_send_refund_processed_email,
-        async_send_refund_rejected_email,
-        async_send_password_reset_email,
-        async_send_password_changed_email,
-        async_send_new_user_joined_email,
-        async_send_payment_reminder_email,
-        async_send_otp_sms,
-        async_send_password_reset_otp_sms,
-        async_send_login_verification_sms,
-        async_send_security_alert_sms,
-    )
-    _ASYNC = True
-    logger.info("✅ Celery tasks imported successfully - ASYNC mode enabled")
+    from celery import current_app
+    # Check if Celery is properly configured
+    if hasattr(current_app, 'conf') and current_app.conf.broker_url:
+        _ASYNC = getattr(settings, 'NOTIFICATIONS_ASYNC', True)
+        logger.info(f"✅ Celery detected - ASYNC mode enabled: {_ASYNC}")
+    else:
+        _ASYNC = False
+        logger.warning("❌ Celery not configured - SYNC mode enabled")
 except Exception as e:
     _ASYNC = False
-    logger.warning(f"❌ Celery tasks import failed - SYNC mode enabled. Error: {str(e)}")
+    logger.warning(f"❌ Celery not available - SYNC mode enabled. Error: {str(e)}")
 
 class NotificationService:
     
@@ -47,14 +29,6 @@ class NotificationService:
     def send_notification(user, template_name, context_data=None, recipient_email=None, recipient_phone=None, channel='email'):
         """
         Send notification using HTML-only email templates
-        
-        Args:
-            user: User object
-            template_name: Template name (e.g., 'welcome', 'payment_success')
-            context_ Additional context for template
-            recipient_email: Override email (optional)
-            recipient_phone: Override phone (optional)
-            channel: 'email', 'sms', or 'both'
         """
         logger.info(f"🔥 NotificationService called: {template_name} for {user.email}")
         logger.info(f"🎯 Channel: {channel}, _ASYNC: {_ASYNC}")
@@ -204,17 +178,15 @@ class NotificationService:
             import traceback
             logger.error(traceback.format_exc())
             return False, str(e)
-
+    
+    # Static notification methods (unchanged - these are used by Celery tasks)
     @staticmethod
     def send_welcome_email(user):
         """Send welcome email when user first registers"""
-        logger.info(f"🎉 send_welcome_email called for {user.email}")
         context = {
             'login_url': f"{settings.FRONTEND_URL}/login",
         }
         return NotificationService.send_notification(user, 'welcome', context)
-    
-
     
     @staticmethod
     def send_profile_complete_email(user):
@@ -362,10 +334,9 @@ class NotificationService:
         return NotificationService.send_notification(user, 'subscription_expired', context)
     
     @staticmethod
-    def send_subscription_renewed_email(user,subscription):
+    def send_subscription_renewed_email(user, subscription):
         """Send email when subscription is renewed"""
         context = {
-            # 'old_subscription': old_subscription,
             'new_subscription': subscription,
             'plan_name': subscription.plan.name,
             'start_date': subscription.start_date,
@@ -455,142 +426,250 @@ class NotificationService:
         return NotificationService.send_notification(user, 'security_alert', context, channel='sms')
 
 
-# Convenience functions with Celery async support
+# Updated convenience functions with async support
 def send_welcome_email(user):
+    logger.info(f"🎉 send_welcome_email called for {user.email}, _ASYNC: {_ASYNC}")
     if _ASYNC:
-        async_send_welcome_email.delay(user.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_welcome_email
+            task = async_send_welcome_email.delay(user.id)
+            logger.info(f"🚀 Welcome email queued via Celery: {task.id}")
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue welcome email task: {str(e)}")
+            # Fallback to sync
+            return NotificationService.send_welcome_email(user)
     return NotificationService.send_welcome_email(user)
 
 def send_profile_complete_email(user):
     if _ASYNC:
-        async_send_profile_complete_email.delay(user.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_profile_complete_email
+            async_send_profile_complete_email.delay(user.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue profile complete email task: {str(e)}")
+            return NotificationService.send_profile_complete_email(user)
     return NotificationService.send_profile_complete_email(user)
 
 def send_subscription_created_email(user, subscription):
     if _ASYNC:
-        async_send_subscription_created_email.delay(user.id, subscription.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_subscription_created_email
+            async_send_subscription_created_email.delay(user.id, subscription.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue subscription created email task: {str(e)}")
+            return NotificationService.send_subscription_created_email(user, subscription)
     return NotificationService.send_subscription_created_email(user, subscription)
 
 def send_payment_success_email(user, subscription, payment):
     if _ASYNC:
-        async_send_payment_success_email.delay(user.id, subscription.id, payment.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_payment_success_email
+            async_send_payment_success_email.delay(user.id, subscription.id, payment.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue payment success email task: {str(e)}")
+            return NotificationService.send_payment_success_email(user, subscription, payment)
     return NotificationService.send_payment_success_email(user, subscription, payment)
 
 def send_payment_failed_email(user, subscription, order):
     if _ASYNC:
-        async_send_payment_failed_email.delay(user.id, subscription.id, order.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_payment_failed_email
+            async_send_payment_failed_email.delay(user.id, subscription.id, order.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue payment failed email task: {str(e)}")
+            return NotificationService.send_payment_failed_email(user, subscription, order)
     return NotificationService.send_payment_failed_email(user, subscription, order)
 
 def send_leave_submitted_email(user, leave):
     if _ASYNC:
-        async_send_leave_submitted_email.delay(user.id, leave.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_leave_submitted_email
+            async_send_leave_submitted_email.delay(user.id, leave.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue leave submitted email task: {str(e)}")
+            return NotificationService.send_leave_submitted_email(user, leave)
     return NotificationService.send_leave_submitted_email(user, leave)
 
 def send_leave_approved_email(user, leave):
     if _ASYNC:
-        async_send_leave_approved_email.delay(user.id, leave.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_leave_approved_email
+            async_send_leave_approved_email.delay(user.id, leave.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue leave approved email task: {str(e)}")
+            return NotificationService.send_leave_approved_email(user, leave)
     return NotificationService.send_leave_approved_email(user, leave)
 
 def send_leave_rejected_email(user, leave):
     if _ASYNC:
-        async_send_leave_rejected_email.delay(user.id, leave.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_leave_rejected_email
+            async_send_leave_rejected_email.delay(user.id, leave.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue leave rejected email task: {str(e)}")
+            return NotificationService.send_leave_rejected_email(user, leave)
     return NotificationService.send_leave_rejected_email(user, leave)
 
 def send_new_user_joined_email(mess_owners, user, subscription):
     if _ASYNC:
-        mess_owner_ids = [owner.id for owner in mess_owners]
-        async_send_new_user_joined_email.delay(mess_owner_ids, user.id, subscription.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_new_user_joined_email
+            mess_owner_ids = [owner.id for owner in mess_owners]
+            async_send_new_user_joined_email.delay(mess_owner_ids, user.id, subscription.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue new user joined email task: {str(e)}")
+            return NotificationService.send_new_user_joined_email(mess_owners, user, subscription)
     return NotificationService.send_new_user_joined_email(mess_owners, user, subscription)
 
 def send_subscription_cancelled_email(user, subscription):
     if _ASYNC:
-        async_send_subscription_cancelled_email.delay(user.id, subscription.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_subscription_cancelled_email
+            async_send_subscription_cancelled_email.delay(user.id, subscription.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue subscription cancelled email task: {str(e)}")
+            return NotificationService.send_subscription_cancelled_email(user, subscription)
     return NotificationService.send_subscription_cancelled_email(user, subscription)
 
 def send_subscription_expiring_email(user, subscription):
     if _ASYNC:
-        async_send_subscription_expiring_email.delay(user.id, subscription.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_subscription_expiring_email
+            async_send_subscription_expiring_email.delay(user.id, subscription.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue subscription expiring email task: {str(e)}")
+            return NotificationService.send_subscription_expiring_email(user, subscription)
     return NotificationService.send_subscription_expiring_email(user, subscription)
 
 def send_subscription_expired_email(user, subscription):
     if _ASYNC:
-        async_send_subscription_expired_email.delay(user.id, subscription.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_subscription_expired_email
+            async_send_subscription_expired_email.delay(user.id, subscription.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue subscription expired email task: {str(e)}")
+            return NotificationService.send_subscription_expired_email(user, subscription)
     return NotificationService.send_subscription_expired_email(user, subscription)
 
-def send_subscription_renewed_email(user,subscription):
+def send_subscription_renewed_email(user, subscription):
     if _ASYNC:
-        async_send_subscription_renewed_email.delay(user.id, subscription.id)
-        return True, ""
-    return NotificationService.send_subscription_renewed_email(user,subscription)
+        try:
+            from notifications.tasks import async_send_subscription_renewed_email
+            async_send_subscription_renewed_email.delay(user.id, subscription.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue subscription renewed email task: {str(e)}")
+            return NotificationService.send_subscription_renewed_email(user, subscription)
+    return NotificationService.send_subscription_renewed_email(user, subscription)
 
 def send_payment_reminder_email(user, subscription):
     if _ASYNC:
-        async_send_payment_reminder_email.delay(user.id, subscription.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_payment_reminder_email
+            async_send_payment_reminder_email.delay(user.id, subscription.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue payment reminder email task: {str(e)}")
+            return NotificationService.send_payment_reminder_email(user, subscription)
     return NotificationService.send_payment_reminder_email(user, subscription)
 
 def send_password_reset_email(user, uidb64, token):
     if _ASYNC:
-        async_send_password_reset_email.delay(user.id, uidb64, token)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_password_reset_email
+            async_send_password_reset_email.delay(user.id, uidb64, token)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue password reset email task: {str(e)}")
+            return NotificationService.send_password_reset_email(user, uidb64, token)
     return NotificationService.send_password_reset_email(user, uidb64, token)
 
 def send_password_changed_email(user):
     if _ASYNC:
-        async_send_password_changed_email.delay(user.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_password_changed_email
+            async_send_password_changed_email.delay(user.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue password changed email task: {str(e)}")
+            return NotificationService.send_password_changed_email(user)
     return NotificationService.send_password_changed_email(user)
 
 def send_refund_processed_email(user, refund_request):
     if _ASYNC:
-        async_send_refund_processed_email.delay(user.id, refund_request.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_refund_processed_email
+            async_send_refund_processed_email.delay(user.id, refund_request.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue refund processed email task: {str(e)}")
+            return NotificationService.send_refund_processed_email(user, refund_request)
     return NotificationService.send_refund_processed_email(user, refund_request)
 
 def send_refund_rejected_email(user, refund_request):
     if _ASYNC:
-        async_send_refund_rejected_email.delay(user.id, refund_request.id)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_refund_rejected_email
+            async_send_refund_rejected_email.delay(user.id, refund_request.id)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue refund rejected email task: {str(e)}")
+            return NotificationService.send_refund_rejected_email(user, refund_request)
     return NotificationService.send_refund_rejected_email(user, refund_request)
 
 # SMS Auth convenience functions
 def send_otp_sms(user, otp):
     if _ASYNC:
-        async_send_otp_sms.delay(user.id, otp)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_otp_sms
+            async_send_otp_sms.delay(user.id, otp)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue OTP SMS task: {str(e)}")
+            return NotificationService.send_otp_sms(user, otp)
     return NotificationService.send_otp_sms(user, otp)
 
 def send_password_reset_otp_sms(user, otp):
     if _ASYNC:
-        async_send_password_reset_otp_sms.delay(user.id, otp)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_password_reset_otp_sms
+            async_send_password_reset_otp_sms.delay(user.id, otp)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue password reset OTP SMS task: {str(e)}")
+            return NotificationService.send_password_reset_otp_sms(user, otp)
     return NotificationService.send_password_reset_otp_sms(user, otp)
 
 def send_login_verification_sms(user, code):
     if _ASYNC:
-        async_send_login_verification_sms.delay(user.id, code)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_login_verification_sms
+            async_send_login_verification_sms.delay(user.id, code)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue login verification SMS task: {str(e)}")
+            return NotificationService.send_login_verification_sms(user, code)
     return NotificationService.send_login_verification_sms(user, code)
 
 def send_security_alert_sms(user, alert_message):
     if _ASYNC:
-        async_send_security_alert_sms.delay(user.id, alert_message)
-        return True, ""
+        try:
+            from notifications.tasks import async_send_security_alert_sms
+            async_send_security_alert_sms.delay(user.id, alert_message)
+            return True, ""
+        except Exception as e:
+            logger.error(f"❌ Failed to queue security alert SMS task: {str(e)}")
+            return NotificationService.send_security_alert_sms(user, alert_message)
     return NotificationService.send_security_alert_sms(user, alert_message)
-
-
-
-
-
