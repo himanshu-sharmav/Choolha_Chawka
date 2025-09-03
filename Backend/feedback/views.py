@@ -1,5 +1,4 @@
 from rest_framework import viewsets, status, filters
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -158,13 +157,6 @@ class AdminFeedbackViewSet(ListRetrieveCacheMixin, viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'priority', 'status', 'responded_at']
     ordering = ['-priority', '-created_at']
     cache_ttl = 60
-    
-    class AdminDefaultPagination(PageNumberPagination):
-        page_size = 50
-        page_size_query_param = 'page_size'
-        max_page_size = 200
-    
-    pagination_class = AdminDefaultPagination
     
     def get_queryset(self):
         return Feedback.objects.select_related(

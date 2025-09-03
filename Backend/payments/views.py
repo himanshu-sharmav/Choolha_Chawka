@@ -1,5 +1,4 @@
 from rest_framework import viewsets, status,filters
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -11,7 +10,7 @@ from core.permissions import IsCustomer, IsMessOwner
 from .models import Payment, RazorpayOrder, RefundRequest
 from .serializers import (
     PaymentSerializer, RazorpayOrderCreateSerializer, RazorpayOrderSerializer,
-    PaymentVerificationSerializer, RefundRequestSerializer, AdminPaymentListSerializer
+    PaymentVerificationSerializer, RefundRequestSerializer
 )
 from django.shortcuts import render
 from .services import razorpay_service
@@ -22,7 +21,6 @@ from notifications.services import NotificationService
 import io
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
-from django.db import models
 from django.db.models import Sum, Count, Avg
 from core.cache_service import cache_get, ListRetrieveCacheMixin
 
@@ -258,29 +256,11 @@ class AdminPaymentViewSet(ListRetrieveCacheMixin, viewsets.ReadOnlyModelViewSet)
     ordering = ['-created_at']
     cache_ttl = 60
     
-    class AdminDefaultPagination(PageNumberPagination):
-        page_size = 50
-        page_size_query_param = 'page_size'
-        max_page_size = 200
-    
-    pagination_class = AdminDefaultPagination
-    
+    @cache_get()
     def get_queryset(self):
-        # Optimize list with minimal columns and related fetches
-        qs = Payment.objects.select_related('user', 'subscription', 'subscription__plan')
-        if self.action == 'list':
-            return qs.only(
-                'id', 'payment_gateway', 'transaction_id', 'amount', 'currency', 'status',
-                'created_at', 'updated_at',
-                'user_id', 'user__first_name', 'user__last_name',
-                'subscription_id', 'subscription__plan__name'
-            )
-        return qs
-
-    def get_serializer_class(self):
-        if self.action == 'list':
-            return AdminPaymentListSerializer
-        return PaymentSerializer
+        return Payment.objects.select_related(
+            'user', 'subscription', 'subscription__plan'
+        ).all()  # Admins can see all payments
     
     @action(detail=False, methods=['get'])
     @cache_get()
@@ -289,25 +269,27 @@ class AdminPaymentViewSet(ListRetrieveCacheMixin, viewsets.ReadOnlyModelViewSet)
         all_payments = self.get_queryset()
         
         # Calculate statistics
-        # Use a single aggregate query and correct status values
-        today = timezone.now().date()
-        stats_data = all_payments.aggregate(
-            total_payments=Count('id'),
-            successful_payments=Count('id', filter=models.Q(status='SUCCESS')),
-            failed_payments=Count('id', filter=models.Q(status='FAILED')),
-            pending_payments=Count('id', filter=models.Q(status='PENDING')),
-            total_revenue=Sum('amount', filter=models.Q(status='SUCCESS')),
-            today_revenue=Sum('amount', filter=models.Q(status='SUCCESS', created_at__date=today)),
-            this_month_revenue=Sum('amount', filter=models.Q(
-                status='SUCCESS',
+        stats = {
+            'total_payments': all_payments.count(),
+            'successful_payments': all_payments.filter(status='completed').count(),
+            'failed_payments': all_payments.filter(status='failed').count(),
+            'pending_payments': all_payments.filter(status='pending').count(),
+            'total_revenue': all_payments.filter(status='completed').aggregate(
+                total=Sum('amount')
+            )['total'] or 0,
+            'today_revenue': all_payments.filter(
+                status='completed',
+                created_at__date=timezone.now().date()
+            ).aggregate(total=Sum('amount'))['total'] or 0,
+            'this_month_revenue': all_payments.filter(
+                status='completed',
                 created_at__month=timezone.now().month,
                 created_at__year=timezone.now().year
-            )),
-            average_payment=Avg('amount', filter=models.Q(status='SUCCESS')),
-        )
-        stats = {k: stats_data.get(k) or 0 for k in [
-            'total_payments', 'successful_payments', 'failed_payments', 'pending_payments',
-            'total_revenue', 'today_revenue', 'this_month_revenue', 'average_payment']}
+            ).aggregate(total=Sum('amount'))['total'] or 0,
+            'average_payment': all_payments.filter(status='completed').aggregate(
+                avg=Avg('amount')
+            )['avg'] or 0,
+        }
         
         # Convert amounts from paise to rupees
         for key in ['total_revenue', 'today_revenue', 'this_month_revenue', 'average_payment']:
@@ -321,15 +303,15 @@ class AdminPaymentViewSet(ListRetrieveCacheMixin, viewsets.ReadOnlyModelViewSet)
     def recent_payments(self, request):
         """Get recent payments for admin"""
         recent = self.get_queryset()[:20]
-        serializer = AdminPaymentListSerializer(recent, many=True)
+        serializer = self.get_serializer(recent, many=True)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
     @cache_get()
     def failed_payments(self, request):
         """Get failed payments for admin review"""
-        failed = self.get_queryset().filter(status='FAILED')
-        serializer = AdminPaymentListSerializer(failed, many=True)
+        failed = self.get_queryset().filter(status='failed')
+        serializer = self.get_serializer(failed, many=True)
         return Response(serializer.data)
 
 
