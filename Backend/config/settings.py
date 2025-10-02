@@ -252,6 +252,19 @@ REDIS_URL = env("REDIS_URL", default="redis://localhost:6379")
 CELERY_BROKER_URL = CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_TASK_ALWAYS_EAGER = False
 
+# Celery Beat Configuration for Periodic Tasks
+CELERY_BEAT_SCHEDULE = {
+    'update-expired-subscriptions': {
+        'task': 'subscriptions.tasks.update_expired_subscriptions',
+        'schedule': 60.0 * 60,  # Run every hour
+    },
+    'send-expiry-notifications': {
+        'task': 'notifications.tasks.send_expiry_notifications',
+        'schedule': 60.0 * 60 * 24,  # Run daily at midnight
+    },
+}
+CELERY_TIMEZONE = 'Asia/Kolkata'
+
 # Twilio settings
 TWILIO_ACCOUNT_SID = env('TWILIO_ACCOUNT_SID')
 TWILIO_AUTH_TOKEN = env('TWILIO_AUTH_TOKEN')
@@ -317,7 +330,7 @@ CACHES = {
         'KEY_PREFIX': env('CACHE_KEY_PREFIX', default='cc'),
     }
 }
-NOTIFICATIONS_ASYNC = False
+NOTIFICATIONS_ASYNC = env.bool('NOTIFICATIONS_ASYNC', default=False)
 
 # Logging configuration
 LOG_LEVEL = env('LOG_LEVEL', default='INFO')
