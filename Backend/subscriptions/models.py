@@ -69,17 +69,17 @@ class Subscription(models.Model):
             self.adjusted_end_date = self.base_end_date
         today = timezone.now().date()
         # Make sure you have an 'adjusted_end_date' field
-        if self.adjusted_end_date and self.adjusted_end_date < today:
+        if self.adjusted_end_date and self.adjusted_end_date <= today:
             self.status = 'EXPIRED'
         elif hasattr(self, 'days_remaining') and self.days_remaining == 0:
             self.status = 'EXPIRED' 
 
         if self.adjusted_end_date:
-            if self.adjusted_end_date < today:
+            if self.adjusted_end_date <= today:
                 # Subscription has expired
                 if self.status not in ['CANCELLED', 'REFUNDED']:
                     self.status = 'EXPIRED'
-            elif self.adjusted_end_date >= today:
+            elif self.adjusted_end_date > today:
                 # Subscription is current/future
                 if self.status == 'EXPIRED':
                     # Reactivate if date was extended
@@ -129,6 +129,12 @@ class Subscription(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['plan', 'status']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['adjusted_end_date']),
+        ]
 
 class Leave(models.Model):
     STATUS_CHOICES = [

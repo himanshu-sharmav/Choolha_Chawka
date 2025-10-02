@@ -22,8 +22,9 @@ import io
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from django.db.models import Sum, Count, Avg
+from core.cache_service import cache_get, ListRetrieveCacheMixin
 
-class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
+class PaymentViewSet(ListRetrieveCacheMixin, viewsets.ReadOnlyModelViewSet):
     """ViewSet for viewing payment history"""
     serializer_class = PaymentSerializer
     permission_classes = [IsAuthenticated]  # Changed from IsCustomer
@@ -244,7 +245,7 @@ class RazorpayOrderViewSet(viewsets.ModelViewSet):
 # payments/views.py
 
 
-class AdminPaymentViewSet(viewsets.ReadOnlyModelViewSet):
+class AdminPaymentViewSet(ListRetrieveCacheMixin, viewsets.ReadOnlyModelViewSet):
     """ViewSet for admin payment management"""
     serializer_class = PaymentSerializer
     permission_classes = [IsMessOwner]
@@ -253,6 +254,7 @@ class AdminPaymentViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['transaction_id', 'user__username', 'user__email', 'user__phone']
     ordering_fields = ['created_at', 'amount', 'status']
     ordering = ['-created_at']
+    cache_ttl = 60
     
     def get_queryset(self):
         return Payment.objects.select_related(
@@ -260,6 +262,7 @@ class AdminPaymentViewSet(viewsets.ReadOnlyModelViewSet):
         ).all()  # Admins can see all payments
     
     @action(detail=False, methods=['get'])
+    @cache_get()
     def dashboard_stats(self, request):
         """Get payment dashboard statistics for admin"""
         all_payments = self.get_queryset()
@@ -295,6 +298,7 @@ class AdminPaymentViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(stats)
     
     @action(detail=False, methods=['get'])
+    @cache_get()
     def recent_payments(self, request):
         """Get recent payments for admin"""
         recent = self.get_queryset()[:20]
@@ -302,6 +306,7 @@ class AdminPaymentViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
+    @cache_get()
     def failed_payments(self, request):
         """Get failed payments for admin review"""
         failed = self.get_queryset().filter(status='failed')

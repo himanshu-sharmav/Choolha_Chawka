@@ -4,7 +4,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 from django.utils.html import strip_tags
 from django.utils import timezone
-from core.sms import send_sms  
+from core.sms import send_sms
 from .models import NotificationLog
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,6 @@ except Exception as e:
     logger.warning(f"❌ Celery not available - SYNC mode enabled. Error: {str(e)}")
 
 class NotificationService:
-    
     @staticmethod
     def send_notification(user, template_name, context_data=None, recipient_email=None, recipient_phone=None, channel='email'):
         """
@@ -47,18 +46,17 @@ class NotificationService:
                 'user': user,
                 'user_name': user.get_full_name() or user.username,
                 'platform_name': 'Choolha Chowka',
-                'support_email': getattr(settings, 'SUPPORT_EMAIL', 'support@choolhaChowka.com'),
+                'support_email': getattr(settings, 'SUPPORT_EMAIL', 'support@choolhachowka.com'),
                 'frontend_url': getattr(settings, 'FRONTEND_URL', 'http://localhost:3000'),
             })
-            
-            # Determine recipients
-            email = recipient_email or user.email
-            phone = recipient_phone or user.phone
-            
+
+            email = recipient_email or getattr(user, 'email', None)
+            phone = recipient_phone or getattr(user, 'phone', None)
+
             success = True
             error_message = ""
-            
-            # Send Email (HTML-only)
+
+            # EMAIL
             if channel in ['email', 'both'] and email:
                 logger.info(f"📧 Attempting to send email to {email}")
                 try:
@@ -66,8 +64,7 @@ class NotificationService:
                     
                     # Render subject and HTML template
                     subject = render_to_string(
-                        f'notifications/subjects/{template_name}.txt', 
-                        context_data
+                        f'notifications/subjects/{template_name}.txt', context_data
                     ).strip()
                     logger.info(f"📋 Subject rendered: {subject}")
                     
@@ -105,7 +102,7 @@ class NotificationService:
                         channel='email',
                         recipient_email=email,
                         subject=subject,
-                        status='sent'
+                        status='sent',
                     )
                     logger.info("📊 NotificationLog created for successful email")
                     
@@ -137,8 +134,7 @@ class NotificationService:
                 logger.info(f"📱 Attempting to send SMS to {phone}")
                 try:
                     sms_message = render_to_string(
-                        f'notifications/sms/{template_name}.txt', 
-                        context_data
+                        f'notifications/sms/{template_name}.txt', context_data
                     ).strip()
                     logger.info(f"💬 SMS message rendered: {sms_message}")
                     
@@ -161,9 +157,8 @@ class NotificationService:
                         channel='sms',
                         recipient_phone=phone,
                         status=status,
-                        error_message=sms_response.get('error', '') if not sms_response.get('success') else ''
+                        error_message='' if sms_response.get('success') else err,
                     )
-                    
                 except Exception as e:
                     logger.error(f"❌ SMS notification failed for {template_name}: {str(e)}")
                     error_message += f"SMS failed: {str(e)}; "
@@ -171,7 +166,6 @@ class NotificationService:
             
             logger.info(f"🏁 NotificationService completed. Success: {success}, Error: {error_message}")
             return success, error_message
-            
         except Exception as e:
             logger.error(f"💥 Critical error in NotificationService for {template_name}: {str(e)}")
             logger.error(f"📍 Critical error traceback:")
@@ -182,23 +176,16 @@ class NotificationService:
     # Static notification methods (unchanged - these are used by Celery tasks)
     @staticmethod
     def send_welcome_email(user):
-        """Send welcome email when user first registers"""
-        context = {
-            'login_url': f"{settings.FRONTEND_URL}/login",
-        }
+        context = {'login_url': f"{settings.FRONTEND_URL}/login"}
         return NotificationService.send_notification(user, 'welcome', context)
-    
+
     @staticmethod
     def send_profile_complete_email(user):
-        """Send email when user completes profile"""
-        context = {
-            'dashboard_url': f"{settings.FRONTEND_URL}/dashboard",
-        }
+        context = {'dashboard_url': f"{settings.FRONTEND_URL}/dashboard"}
         return NotificationService.send_notification(user, 'profile_complete', context)
-    
+
     @staticmethod
     def send_subscription_created_email(user, subscription):
-        """Send email when subscription is created (pending payment)"""
         context = {
             'subscription': subscription,
             'plan_name': subscription.plan.name,
@@ -206,10 +193,9 @@ class NotificationService:
             'payment_url': f"{settings.FRONTEND_URL}/payment/{subscription.id}",
         }
         return NotificationService.send_notification(user, 'subscription_created', context)
-    
+
     @staticmethod
     def send_payment_success_email(user, subscription, payment):
-        """Send email when payment is successful"""
         context = {
             'subscription': subscription,
             'payment': payment,
@@ -219,10 +205,9 @@ class NotificationService:
             'end_date': subscription.adjusted_end_date,
         }
         return NotificationService.send_notification(user, 'payment_success', context)
-    
+
     @staticmethod
     def send_payment_failed_email(user, subscription, order):
-        """Send email when payment fails"""
         context = {
             'subscription': subscription,
             'plan_name': subscription.plan.name,
@@ -230,11 +215,9 @@ class NotificationService:
             'retry_payment_url': f"{settings.FRONTEND_URL}/payment/{subscription.id}",
         }
         return NotificationService.send_notification(user, 'payment_failed', context)
-    
+
     @staticmethod
     def send_leave_submitted_email(user, leave):
-        """Send email when leave is submitted"""
-        # To user (confirmation)
         context = {
             'leave': leave,
             'leave_days': leave.duration_days,
@@ -242,11 +225,8 @@ class NotificationService:
             'end_date': leave.leave_end_date,
         }
         NotificationService.send_notification(user, 'leave_submitted', context)
-        
-        # To mess owner (notification)
+
         from accounts.models import User
-        mess_owners = User.objects.filter(user_type='mess_owner')
-        
         owner_context = {
             'user_name': user.get_full_name() or user.username,
             'user_phone': user.phone,
@@ -257,13 +237,11 @@ class NotificationService:
             'reason': leave.reason,
             'dashboard_url': f"{settings.FRONTEND_URL}/owner/leaves",
         }
-        
-        for owner in mess_owners:
+        for owner in User.objects.filter(user_type='mess_owner'):
             NotificationService.send_notification(owner, 'new_leave_request', owner_context)
-    
+
     @staticmethod
     def send_leave_approved_email(user, leave):
-        """Send email when leave is approved"""
         context = {
             'leave': leave,
             'leave_days': leave.duration_days,
@@ -272,10 +250,9 @@ class NotificationService:
             'admin_comment': leave.admin_comment,
         }
         return NotificationService.send_notification(user, 'leave_approved', context)
-    
+
     @staticmethod
     def send_leave_rejected_email(user, leave):
-        """Send email when leave is rejected"""
         context = {
             'leave': leave,
             'leave_days': leave.duration_days,
@@ -284,10 +261,9 @@ class NotificationService:
             'admin_comment': leave.admin_comment,
         }
         return NotificationService.send_notification(user, 'leave_rejected', context)
-    
+
     @staticmethod
     def send_new_user_joined_email(mess_owners, user, subscription):
-        """Send email to mess owners when new user joins"""
         context = {
             'new_user_name': user.get_full_name() or user.username,
             'new_user_phone': user.phone,
@@ -295,13 +271,11 @@ class NotificationService:
             'start_date': subscription.start_date,
             'dashboard_url': f"{settings.FRONTEND_URL}/owner/users",
         }
-        
         for owner in mess_owners:
             NotificationService.send_notification(owner, 'new_user_joined', context)
-    
+
     @staticmethod
     def send_subscription_cancelled_email(user, subscription):
-        """Send email when subscription is cancelled"""
         context = {
             'subscription': subscription,
             'plan_name': subscription.plan.name,
@@ -310,10 +284,9 @@ class NotificationService:
             'refund_status': subscription.get_refund_status_display() if subscription.refund_status else 'No refund',
         }
         return NotificationService.send_notification(user, 'subscription_cancelled', context)
-    
+
     @staticmethod
     def send_subscription_expiring_email(user, subscription):
-        """Send email when subscription is about to expire"""
         context = {
             'subscription': subscription,
             'plan_name': subscription.plan.name,
@@ -321,10 +294,9 @@ class NotificationService:
             'renew_url': f"{settings.FRONTEND_URL}/renew/{subscription.id}",
         }
         return NotificationService.send_notification(user, 'subscription_expiring', context)
-    
+
     @staticmethod
     def send_subscription_expired_email(user, subscription):
-        """Send email when subscription has expired"""
         context = {
             'subscription': subscription,
             'plan_name': subscription.plan.name,
@@ -332,7 +304,7 @@ class NotificationService:
             'renew_url': f"{settings.FRONTEND_URL}/plans",
         }
         return NotificationService.send_notification(user, 'subscription_expired', context)
-    
+
     @staticmethod
     def send_subscription_renewed_email(user, subscription):
         """Send email when subscription is renewed"""
@@ -344,10 +316,9 @@ class NotificationService:
             'amount': subscription.total_paid,
         }
         return NotificationService.send_notification(user, 'subscription_renewed', context)
-    
+
     @staticmethod
     def send_payment_reminder_email(user, subscription):
-        """Send payment reminder for pending subscription"""
         context = {
             'subscription': subscription,
             'plan_name': subscription.plan.name,
@@ -356,74 +327,58 @@ class NotificationService:
             'days_pending': (timezone.now().date() - subscription.created_at.date()).days,
         }
         return NotificationService.send_notification(user, 'payment_reminder', context)
-    
+
     @staticmethod
     def send_password_reset_email(user, uidb64, token):
-        """Send password reset email"""
-        context = {
-            'reset_url': f"{settings.FRONTEND_URL}/reset-password/{uidb64}/{token}/",
-        }
+        context = {'reset_url': f"{settings.FRONTEND_URL}/reset-password/{uidb64}/{token}/"}
         return NotificationService.send_notification(user, 'password_reset', context)
-    
+
     @staticmethod
     def send_password_changed_email(user):
-        """Send password changed confirmation email"""
-        context = {
-            'login_url': f"{settings.FRONTEND_URL}/login",
-        }
+        context = {'login_url': f"{settings.FRONTEND_URL}/login"}
         return NotificationService.send_notification(user, 'password_changed', context)
-    
+
     @staticmethod
     def send_refund_processed_email(user, refund_request):
-        """Send email when refund is approved/processed"""
         context = {
             'refund_request': refund_request,
             'subscription': refund_request.subscription,
             'plan_name': refund_request.subscription.plan.name,
-            'refund_amount': refund_request.amount,  
+            'refund_amount': refund_request.amount,
             'processed_date': refund_request.processed_at.strftime('%B %d, %Y') if refund_request.processed_at else 'Today',
             'refund_id': refund_request.id,
             'admin_comment': refund_request.admin_comment,
         }
         return NotificationService.send_notification(user, 'refund_processed', context)
-    
+
     @staticmethod
     def send_refund_rejected_email(user, refund_request):
-        """Send email when refund is rejected"""
         context = {
             'refund_request': refund_request,
             'subscription': refund_request.subscription,
             'plan_name': refund_request.subscription.plan.name,
-            'refund_amount': refund_request.amount, 
+            'refund_amount': refund_request.amount,
             'admin_comment': refund_request.admin_comment,
             'support_email': settings.SUPPORT_EMAIL,
         }
         return NotificationService.send_notification(user, 'refund_rejected', context)
-    
-    # SMS Auth methods
+
+    # SMS Auth helpers (sync)
     @staticmethod
     def send_otp_sms(user, otp):
-        """Send OTP via SMS"""
-        context = {'otp': otp}
-        return NotificationService.send_notification(user, 'otp_verification', context, channel='sms')
-    
+        return NotificationService.send_notification(user, 'otp_verification', {'otp': otp}, channel='sms')
+
     @staticmethod
     def send_password_reset_otp_sms(user, otp):
-        """Send password reset OTP via SMS"""
-        context = {'otp': otp}
-        return NotificationService.send_notification(user, 'password_reset_otp', context, channel='sms')
-    
+        return NotificationService.send_notification(user, 'password_reset_otp', {'otp': otp}, channel='sms')
+
     @staticmethod
     def send_login_verification_sms(user, code):
-        """Send login verification code via SMS"""
-        context = {'verification_code': code}
-        return NotificationService.send_notification(user, 'login_verification', context, channel='sms')
-    
+        return NotificationService.send_notification(user, 'login_verification', {'verification_code': code}, channel='sms')
+
     @staticmethod
     def send_security_alert_sms(user, alert_message):
-        """Send security alert via SMS"""
-        context = {'alert_message': alert_message}
-        return NotificationService.send_notification(user, 'security_alert', context, channel='sms')
+        return NotificationService.send_notification(user, 'security_alert', {'alert_message': alert_message}, channel='sms')
 
 
 # Updated convenience functions with async support
@@ -519,6 +474,7 @@ def send_leave_rejected_email(user, leave):
     return NotificationService.send_leave_rejected_email(user, leave)
 
 def send_new_user_joined_email(mess_owners, user, subscription):
+    # For async, we pass owner IDs instead of queryset to keep it serializable
     if _ASYNC:
         try:
             from notifications.tasks import async_send_new_user_joined_email
@@ -629,7 +585,6 @@ def send_refund_rejected_email(user, refund_request):
             return NotificationService.send_refund_rejected_email(user, refund_request)
     return NotificationService.send_refund_rejected_email(user, refund_request)
 
-# SMS Auth convenience functions
 def send_otp_sms(user, otp):
     if _ASYNC:
         try:

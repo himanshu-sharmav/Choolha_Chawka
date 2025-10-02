@@ -74,6 +74,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.RequestLoggingMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -215,6 +216,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
         'rest_framework.permissions.AllowAny',
     ],
+    'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
 }
 
 from datetime import timedelta
@@ -249,6 +251,19 @@ REDIS_URL = env("REDIS_URL", default="redis://localhost:6379")
 
 CELERY_BROKER_URL = CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_TASK_ALWAYS_EAGER = False
+
+# Celery Beat Configuration for Periodic Tasks
+CELERY_BEAT_SCHEDULE = {
+    'update-expired-subscriptions': {
+        'task': 'subscriptions.tasks.update_expired_subscriptions',
+        'schedule': 60.0 * 60,  # Run every hour
+    },
+    'send-expiry-notifications': {
+        'task': 'notifications.tasks.send_expiry_notifications',
+        'schedule': 60.0 * 60 * 24,  # Run daily at midnight
+    },
+}
+CELERY_TIMEZONE = 'Asia/Kolkata'
 
 # Twilio settings
 TWILIO_ACCOUNT_SID = env('TWILIO_ACCOUNT_SID')
@@ -304,3 +319,65 @@ WHITENOISE_USE_FINDERS = True
 
 FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:5173')  # Placeholder URL
 # WHITENOISE_USE_FINDERS = True
+
+# Cache configuration (Redis backed)
+CACHE_TTL = env.int('CACHE_TTL', default=120)  # seconds
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': env('REDIS_URL', default='redis://127.0.0.1:6379/1'),
+        'TIMEOUT': env.int('CACHE_DEFAULT_TIMEOUT', default=300),
+        'KEY_PREFIX': env('CACHE_KEY_PREFIX', default='cc'),
+    }
+}
+NOTIFICATIONS_ASYNC = env.bool('NOTIFICATIONS_ASYNC', default=False)
+
+# Logging configuration
+LOG_LEVEL = env('LOG_LEVEL', default='INFO')
+DJANGO_LOG_LEVEL = env('DJANGO_LOG_LEVEL', default='WARNING')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '%(asctime)s %(levelname)s %(name)s %(message)s'
+        },
+        'simple': {
+            'format': '%(levelname)s %(message)s'
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'app': {
+            'handlers': ['console'],
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+        'django': {
+            'handlers': ['console'],
+            'level': DJANGO_LOG_LEVEL,
+            'propagate': True,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.db.backends': {
+            'handlers': ['console'],
+            'level': env('DB_LOG_LEVEL', default='WARNING'),
+            'propagate': False,
+        },
+        'rest_framework': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}

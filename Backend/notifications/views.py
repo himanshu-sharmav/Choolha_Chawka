@@ -7,8 +7,9 @@ from django.db.models import Count
 from .models import NotificationLog
 from .serializers import NotificationLogSerializer
 from django.utils import timezone
+from core.cache_service import cache_get, ListRetrieveCacheMixin
 
-class NotificationLogViewSet(viewsets.ReadOnlyModelViewSet):
+class NotificationLogViewSet(ListRetrieveCacheMixin, viewsets.ReadOnlyModelViewSet):
     """ViewSet for viewing notification history"""
     serializer_class = NotificationLogSerializer
     permission_classes = [IsAuthenticated]
@@ -20,6 +21,7 @@ class NotificationLogViewSet(viewsets.ReadOnlyModelViewSet):
         return NotificationLog.objects.filter(user=self.request.user)
     
     @action(detail=False, methods=['get'])
+    @cache_get()
     def stats(self, request):
         """Get notification statistics for user"""
         logs = self.get_queryset()
@@ -38,6 +40,7 @@ class NotificationLogViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(stats)
     
     @action(detail=False, methods=['get'])
+    @cache_get()
     def by_type(self, request):
         """Get notifications grouped by type"""
         logs = self.get_queryset()

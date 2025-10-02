@@ -223,7 +223,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         return (obj.adjusted_end_date - today).days
     
     def get_is_active(self, obj):
-        return obj.status == 'ACTIVE' and timezone.now().date() <= obj.adjusted_end_date
+        return obj.status == 'ACTIVE' and timezone.now().date() < obj.adjusted_end_date
 
 
 class LeaveCreateSerializer(serializers.ModelSerializer):

@@ -30,11 +30,10 @@ class Command(BaseCommand):
                     self.style.ERROR(f'Failed to send expiring notification to {subscription.user.username}: {e}')
                 )
         
-        # Send expired notifications (for subscriptions that expired yesterday)
-        expired_date = today - timedelta(days=1)
+        # Send expired notifications (for subscriptions that expired today or before)
         expired_subscriptions = Subscription.objects.select_related('user', 'plan').filter(
             status='ACTIVE',
-            adjusted_end_date=expired_date
+            adjusted_end_date__lte=today
         )
         
         expired_count = 0

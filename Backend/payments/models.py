@@ -41,6 +41,10 @@ class Payment(models.Model):
             models.Index(fields=['user', 'status']),
             models.Index(fields=['transaction_id']),
             models.Index(fields=['gateway_order_id']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['payment_gateway']),
+            models.Index(fields=['amount']),
         ]
 
     def __str__(self):
