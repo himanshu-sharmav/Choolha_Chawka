@@ -252,6 +252,21 @@ REDIS_URL = env("REDIS_URL", default="redis://localhost:6379")
 CELERY_BROKER_URL = CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_TASK_ALWAYS_EAGER = False
 
+# Celery connection and timeout settings
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BROKER_CONNECTION_TIMEOUT = 30
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    'socket_timeout': 30,
+    'socket_connect_timeout': 30,
+    'retry_on_timeout': True,
+}
+
+# Task execution settings
+CELERY_TASK_SOFT_TIME_LIMIT = 300  # 5 minutes
+CELERY_TASK_TIME_LIMIT = 600  # 10 minutes
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
 # Celery Beat Configuration for Periodic Tasks
 CELERY_BEAT_SCHEDULE = {
     'update-expired-subscriptions': {
@@ -309,6 +324,10 @@ EMAIL_HOST_USER = 'resend'  # This is literally the string 'resend'
 EMAIL_HOST_PASSWORD = env('RESEND_API_KEY')  # Your Resend API key
 # DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'  # Your verified domain
 SERVER_EMAIL = env('SERVER_EMAIL', default='noreply@choolhachowka.com')
+
+# Email connection settings for Railway
+EMAIL_TIMEOUT = 30  # 30 seconds timeout
+EMAIL_USE_LOCALTIME = False
 
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@choolhachowka.com')
 
