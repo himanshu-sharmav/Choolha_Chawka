@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 """
-Test email connection from Railway environment
+Test email connection from Railway environment using Resend API
 Run this on your Railway Celery worker to test email connectivity
 """
 
 import os
 import sys
 import django
-from django.core.mail import send_mail
+import resend
 from django.conf import settings
 
 # Setup Django
@@ -15,28 +15,29 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
 def test_email_connection():
-    """Test if we can send emails from Railway"""
+    """Test if we can send emails from Railway using Resend API"""
     try:
-        print("🔧 Testing email configuration...")
-        print(f"EMAIL_HOST: {settings.EMAIL_HOST}")
-        print(f"EMAIL_PORT: {settings.EMAIL_PORT}")
-        print(f"EMAIL_USE_TLS: {settings.EMAIL_USE_TLS}")
-        print(f"EMAIL_HOST_USER: {settings.EMAIL_HOST_USER}")
-        print(f"EMAIL_TIMEOUT: {getattr(settings, 'EMAIL_TIMEOUT', 'Not set')}")
+        print("🔧 Testing Resend API configuration...")
+        print(f"RESEND_API_KEY: {'Set' if settings.RESEND_API_KEY else 'Not set'}")
         print(f"DEFAULT_FROM_EMAIL: {settings.DEFAULT_FROM_EMAIL}")
         
-        print("\n📧 Attempting to send test email...")
+        print("\n📧 Attempting to send test email via Resend API...")
         
-        # Send a test email
-        result = send_mail(
-            subject='Test Email from Railway',
-            message='This is a test email to verify connectivity from Railway Celery worker.',
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=['your-test-email@example.com'],  # Replace with your email
-            fail_silently=False,
-        )
+        # Configure Resend
+        resend.api_key = settings.RESEND_API_KEY
         
-        print(f"✅ Email sent successfully! Result: {result}")
+        # Send a test email via Resend API
+        params = {
+            "from": settings.DEFAULT_FROM_EMAIL,
+            "to": ["your-test-email@example.com"],  # Replace with your email
+            "subject": "Test Email from Railway via Resend API",
+            "html": "<h1>Test Email</h1><p>This is a test email to verify Resend API connectivity from Railway Celery worker.</p>",
+            "text": "Test Email\n\nThis is a test email to verify Resend API connectivity from Railway Celery worker.",
+        }
+        
+        result = resend.Emails.send(params)
+        
+        print(f"✅ Email sent successfully via Resend API! ID: {result.get('id')}")
         return True
         
     except Exception as e:

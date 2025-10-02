@@ -6,6 +6,7 @@ from django.utils.html import strip_tags
 from django.utils import timezone
 from core.sms import send_sms
 from .models import NotificationLog
+import resend
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ class NotificationService:
             success = True
             error_message = ""
 
-            # EMAIL
+            # EMAIL - Using Resend API
             if channel in ['email', 'both'] and email:
                 logger.info(f"📧 Attempting to send email to {email}")
                 try:
@@ -78,22 +79,25 @@ class NotificationService:
                     text_message = strip_tags(html_message)
                     logger.info(f"📄 Plain text version generated, length: {len(text_message)}")
                     
-                    # Use EmailMultiAlternatives for better email support
+                    # Use Resend API instead of SMTP
                     from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com')
-                    logger.info(f"📤 Creating email message from {from_email} to {email}")
+                    logger.info(f"📤 Sending email via Resend API from {from_email} to {email}")
                     
-                    msg = EmailMultiAlternatives(
-                        subject=subject,
-                        body=text_message,  # Fallback plain text
-                        from_email=from_email,
-                        to=[email]
-                    )
-                    msg.attach_alternative(html_message, "text/html")
-                    logger.info("📨 Email message created successfully")
+                    # Configure Resend
+                    resend.api_key = settings.RESEND_API_KEY
                     
-                    logger.info("🚀 Sending email...")
-                    result = msg.send()
-                    logger.info(f"✅ Email sent successfully! Result: {result}")
+                    # Send email via Resend API
+                    params = {
+                        "from": from_email,
+                        "to": [email],
+                        "subject": subject,
+                        "html": html_message,
+                        "text": text_message,
+                    }
+                    
+                    logger.info("🚀 Sending email via Resend API...")
+                    result = resend.Emails.send(params)
+                    logger.info(f"✅ Email sent successfully via Resend API! ID: {result.get('id')}")
                     
                     # Log successful email
                     NotificationLog.objects.create(

@@ -314,25 +314,22 @@ CLOUDINARY_STORAGE = {
 MEDIA_URL = '/media/'
 
 
-# Resend Email Config
-# settings.py - Resend SMTP Configuration
+# Resend Email Config - Using Resend Library instead of SMTP
+RESEND_API_KEY = env('RESEND_API_KEY')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@choolhachowka.com')
+SERVER_EMAIL = env('SERVER_EMAIL', default='noreply@choolhachowka.com')
+
+# Keep SMTP as fallback (but we'll use Resend API primarily)
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.resend.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'resend'  # This is literally the string 'resend'
-EMAIL_HOST_PASSWORD = env('RESEND_API_KEY')  # Your Resend API key
-# DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'  # Your verified domain
-SERVER_EMAIL = env('SERVER_EMAIL', default='noreply@choolhachowka.com')
-
-# Email connection settings for Railway
-EMAIL_TIMEOUT = 30  # 30 seconds timeout
+EMAIL_HOST_USER = 'resend'
+EMAIL_HOST_PASSWORD = RESEND_API_KEY
+EMAIL_TIMEOUT = 30
 EMAIL_USE_LOCALTIME = False
 
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@choolhachowka.com')
-
-# DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'
-EMAIL_USE_LOCALTIME = False
+# Remove duplicate - already set above
 SUPPORT_EMAIL = env('SUPPORT_EMAIL', default='Choolhachowka.com')
 WHITENOISE_USE_FINDERS = True
 
