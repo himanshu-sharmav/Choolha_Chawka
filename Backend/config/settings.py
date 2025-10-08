@@ -271,13 +271,14 @@ CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_BEAT_SCHEDULE = {
     'update-expired-subscriptions': {
         'task': 'subscriptions.tasks.update_expired_subscriptions',
-        'schedule': 60.0 * 60,  # Run every hour
+        'schedule': 60.0 * 60 * 24,  # Run every 24 hours
     },
     'send-expiry-notifications': {
         'task': 'notifications.tasks.send_expiry_notifications',
-        'schedule': 60.0 * 60 * 24,  # Run daily at midnight
+        'schedule': 60.0 * 60 * 24,  # Run every 24 hours
     },
 }
+
 CELERY_TIMEZONE = 'Asia/Kolkata'
 
 # Twilio settings
