@@ -153,8 +153,9 @@ class UserListSerializer(serializers.ModelSerializer):
         ]
     
     def get_subscription_status(self, obj):
-        active_subscription = obj.subscriptions.filter(status='ACTIVE').first()
-        return active_subscription.status if active_subscription else 'No subscription'
+         # Look for the most recent subscription based on your business rule, for now just the first one by recency
+        subscription = obj.subscriptions.order_by('-start_date').first()
+        return subscription.status if subscription else 'No subscription'
     
     def get_active_subscription_end_date(self, obj):
         active_sub = obj.subscriptions.filter(status='ACTIVE').first()
