@@ -110,14 +110,18 @@ if env('DATABASE_URL', default=None):
         'default': dj_database_url.config(
             default=env('DATABASE_URL'),
             conn_max_age=600,
-            engine='dj_db_conn_pool.backends.postgresql'
+            engine='dj_db_conn_pool.backends.postgresql',
+            # Connection pool settings for production
+            conn_health_checks=True,
+            conn_max_requests=1000,
         )
     }
     
     # Fixed PostgreSQL options
     DATABASES['default']['OPTIONS'] = {
         'sslmode': 'require',
-        'connect_timeout': 10,
+        'connect_timeout': 30,  # Increased from 10 to 30 seconds
+        'application_name': 'choolha_chawka',
     }
     
     DATABASES['default']['ATOMIC_REQUESTS'] = True
@@ -135,7 +139,8 @@ else:
             'CONN_MAX_AGE': 300,
             'ATOMIC_REQUESTS': True,
             'OPTIONS': {
-                'connect_timeout': 5,
+                'connect_timeout': 30,  # Increased from 5 to 30 seconds
+                'application_name': 'choolha_chawka_dev',
             }
         }
     }

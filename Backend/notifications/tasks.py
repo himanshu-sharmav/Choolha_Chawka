@@ -1174,10 +1174,14 @@ def async_send_refund_rejected_email(user_id, refund_id):
         logger.error(f"❌ [async_send_refund_rejected_email] Failed for user_id {user_id}: {str(e)}")
 
 # Mess Owner Notification Tasks
-@shared_task
-def async_send_new_user_joined_email(mess_owner_ids, user_id, subscription_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 30})
+def async_send_new_user_joined_email(self, mess_owner_ids, user_id, subscription_id):
     logger.info(f"🚀 [async_send_new_user_joined_email] Starting for mess_owner_ids: {mess_owner_ids}, user_id: {user_id}, subscription_id: {subscription_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         from subscriptions.models import Subscription
         subscription = Subscription.objects.get(id=subscription_id)
