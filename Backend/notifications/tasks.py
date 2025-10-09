@@ -953,6 +953,9 @@ def async_send_payment_reminder_email(user_id, subscription_id):
         
     except Exception as e:
         logger.error(f"❌ [async_send_payment_reminder_email] Failed for user_id {user_id}: {str(e)}")
+
+@shared_task
+def async_send_payment_failed_email(user_id, subscription_id, order_id):
     logger.info(f"🚀 [async_send_payment_failed_email] Starting for user_id: {user_id}, subscription_id: {subscription_id}, order_id: {order_id}")
     try:
         user = _get_user(user_id)
@@ -1199,55 +1202,44 @@ def async_send_new_user_joined_email(mess_owner_ids, user_id, subscription_id):
                 'user_name': owner.get_full_name() or owner.username,
             })
             
-            msg = EmailMultiAlternatives(
-                subject=subject,
-                body=text_message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[owner.email]
-            )
-            msg.attach_alternative(html_message, "text/html")
-            msg.send()
-            
-            logger.info(f"✅ [async_send_new_user_joined_email] Email sent to mess owner {owner.email}")
-        
-    except Exception as e:
-        logger.error(f"❌ [async_send_new_user_joined_email] Failed for mess_owner_ids {mess_owner_ids}: {str(e)}")
-    logger.info(f"🚀 [async_send_new_user_joined_email] Starting for mess_owner_ids: {mess_owner_ids}, user_id: {user_id}, subscription_id: {subscription_id}")
-    try:
-        user = _get_user(user_id)
-        from subscriptions.models import Subscription
-        subscription = Subscription.objects.get(id=subscription_id)
-        mess_owners = User.objects.filter(id__in=mess_owner_ids)
-        
-        context = {
-            'new_user_name': user.get_full_name() or user.username,
-            'new_user_phone': user.phone,
-            'plan_name': subscription.plan.name,
-            'start_date': subscription.start_date,
-            'dashboard_url': f"{getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')}/owner/users",
-        }
-        
-        subject = render_to_string('notifications/subjects/new_user_joined.txt', context).strip()
-        html_message = render_to_string('notifications/email/new_user_joined.html', context)
-        text_message = strip_tags(html_message)
-
-        for owner in mess_owners:
-            owner_context = context.copy()
-            owner_context.update({
-                'user': owner,
-                'user_name': owner.get_full_name() or owner.username,
-            })
-            
-            msg = EmailMultiAlternatives(
-                subject=subject,
-                body=text_message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[owner.email]
-            )
-            msg.attach_alternative(html_message, "text/html")
-            msg.send()
-            
-            logger.info(f"✅ [async_send_new_user_joined_email] Email sent to mess owner {owner.email}")
+            # Use Resend API instead of SMTP for better reliability
+            try:
+                from notifications.resend_api import send_email_via_resend_api
+                success, result = send_email_via_resend_api(
+                    to_email=owner.email,
+                    subject=subject,
+                    html_content=html_message,
+                    text_content=text_message
+                )
+                if success:
+                    logger.info(f"✅ [async_send_new_user_joined_email] Email sent via Resend API to mess owner {owner.email}")
+                else:
+                    logger.error(f"❌ [async_send_new_user_joined_email] Resend API failed for {owner.email}: {result}")
+                    # Fallback to SMTP
+                    msg = EmailMultiAlternatives(
+                        subject=subject,
+                        body=text_message,
+                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                        to=[owner.email]
+                    )
+                    msg.attach_alternative(html_message, "text/html")
+                    msg.send()
+                    logger.info(f"✅ [async_send_new_user_joined_email] Email sent via SMTP fallback to mess owner {owner.email}")
+            except Exception as email_error:
+                logger.error(f"❌ [async_send_new_user_joined_email] Email sending failed for {owner.email}: {str(email_error)}")
+                # Try SMTP fallback
+                try:
+                    msg = EmailMultiAlternatives(
+                        subject=subject,
+                        body=text_message,
+                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                        to=[owner.email]
+                    )
+                    msg.attach_alternative(html_message, "text/html")
+                    msg.send()
+                    logger.info(f"✅ [async_send_new_user_joined_email] Email sent via SMTP fallback to mess owner {owner.email}")
+                except Exception as smtp_error:
+                    logger.error(f"❌ [async_send_new_user_joined_email] Both Resend API and SMTP failed for {owner.email}: {str(smtp_error)}")
         
     except Exception as e:
         logger.error(f"❌ [async_send_new_user_joined_email] Failed for mess_owner_ids {mess_owner_ids}: {str(e)}")
