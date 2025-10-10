@@ -646,48 +646,44 @@ def async_send_leave_submitted_email(self, user_id, leave_id):
         html_message = render_to_string('notifications/email/leave_submitted.html', context)
         text_message = strip_tags(html_message)
 
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        msg.attach_alternative(html_message, "text/html")
-        msg.send()
-        
-        logger.info(f"✅ [async_send_leave_submitted_email] Email sent to {user.email}")
-        
-    except Exception as e:
-        logger.error(f"❌ [async_send_leave_submitted_email] Failed for user_id {user_id}: {str(e)}")
-    logger.info(f"🚀 [async_send_leave_submitted_email] Starting for user_id: {user_id}, leave_id: {leave_id}")
-    try:
-        user = _get_user(user_id)
-        from subscriptions.models import Leave
-        leave = Leave.objects.get(id=leave_id)
-        
-        context = {
-            'user': user,
-            'user_name': user.get_full_name() or user.username,
-            'leave': leave,
-            'leave_days': leave.duration_days,
-            'start_date': leave.leave_start_date,
-            'end_date': leave.leave_end_date,
-        }
-        
-        subject = render_to_string('notifications/subjects/leave_submitted.txt', context).strip()
-        html_message = render_to_string('notifications/email/leave_submitted.html', context)
-        text_message = strip_tags(html_message)
-
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        msg.attach_alternative(html_message, "text/html")
-        msg.send()
-        
-        logger.info(f"✅ [async_send_leave_submitted_email] Email sent to {user.email}")
+        # Use Resend API instead of SMTP for better reliability
+        try:
+            from notifications.resend_api import send_email_via_resend_api
+            success, result = send_email_via_resend_api(
+                to_email=user.email,
+                subject=subject,
+                html_content=html_message,
+                text_content=text_message
+            )
+            if success:
+                logger.info(f"✅ [async_send_leave_submitted_email] Email sent via Resend API to {user.email}")
+            else:
+                logger.error(f"❌ [async_send_leave_submitted_email] Resend API failed for {user.email}: {result}")
+                # Fallback to SMTP
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_leave_submitted_email] Email sent via SMTP fallback to {user.email}")
+        except Exception as email_error:
+            logger.error(f"❌ [async_send_leave_submitted_email] Email sending failed for {user.email}: {str(email_error)}")
+            # Try SMTP fallback
+            try:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_leave_submitted_email] Email sent via SMTP fallback to {user.email}")
+            except Exception as smtp_error:
+                logger.error(f"❌ [async_send_leave_submitted_email] Both Resend API and SMTP failed for {user.email}: {str(smtp_error)}")
         
     except Exception as e:
         logger.error(f"❌ [async_send_leave_submitted_email] Failed for user_id {user_id}: {str(e)}")
