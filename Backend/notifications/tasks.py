@@ -149,10 +149,14 @@ def async_send_profile_complete_email(self, user_id):
     except Exception as e:
         logger.error(f"❌ [async_send_profile_complete_email] Failed for user_id {user_id}: {str(e)}")
 
-@shared_task
-def async_send_password_changed_email(user_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_password_changed_email(self, user_id):
     logger.info(f"🚀 [async_send_password_changed_email] Starting for user_id: {user_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         context = {
             'user': user,
@@ -204,10 +208,14 @@ def async_send_password_changed_email(user_id):
     except Exception as e:
         logger.error(f"❌ [async_send_password_changed_email] Failed for user_id {user_id}: {str(e)}")
 
-@shared_task
-def async_send_password_reset_email(user_id, uidb64, token):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_password_reset_email(self, user_id, uidb64, token):
     logger.info(f"🚀 [async_send_password_reset_email] Starting for user_id: {user_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         context = {
             'user': user,
@@ -611,10 +619,14 @@ def async_send_subscription_expired_email(user_id, subscription_id):
         logger.error(f"❌ [async_send_subscription_expired_email] Failed for user_id {user_id}: {str(e)}")
 
 # Leave Management Tasks
-@shared_task
-def async_send_leave_submitted_email(user_id, leave_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_leave_submitted_email(self, user_id, leave_id):
     logger.info(f"🚀 [async_send_leave_submitted_email] Starting for user_id: {user_id}, leave_id: {leave_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         from subscriptions.models import Leave
         leave = Leave.objects.get(id=leave_id)
@@ -678,10 +690,14 @@ def async_send_leave_submitted_email(user_id, leave_id):
     except Exception as e:
         logger.error(f"❌ [async_send_leave_submitted_email] Failed for user_id {user_id}: {str(e)}")
 
-@shared_task
-def async_send_leave_approved_email(user_id, leave_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_leave_approved_email(self, user_id, leave_id):
     logger.info(f"🚀 [async_send_leave_approved_email] Starting for user_id: {user_id}, leave_id: {leave_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         from subscriptions.models import Leave
         leave = Leave.objects.get(id=leave_id)
@@ -747,10 +763,14 @@ def async_send_leave_approved_email(user_id, leave_id):
     except Exception as e:
         logger.error(f"❌ [async_send_leave_approved_email] Failed for user_id {user_id}: {str(e)}")
 
-@shared_task
-def async_send_leave_rejected_email(user_id, leave_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_leave_rejected_email(self, user_id, leave_id):
     logger.info(f"🚀 [async_send_leave_rejected_email] Starting for user_id: {user_id}, leave_id: {leave_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         from subscriptions.models import Leave
         leave = Leave.objects.get(id=leave_id)
@@ -817,10 +837,14 @@ def async_send_leave_rejected_email(user_id, leave_id):
         logger.error(f"❌ [async_send_leave_rejected_email] Failed for user_id {user_id}: {str(e)}")
 
 # Payment Tasks
-@shared_task
-def async_send_payment_success_email(user_id, subscription_id, payment_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_payment_success_email(self, user_id, subscription_id, payment_id):
     logger.info(f"🚀 [async_send_payment_success_email] Starting for user_id: {user_id}, subscription_id: {subscription_id}, payment_id: {payment_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         from subscriptions.models import Subscription
         from payments.models import Payment
