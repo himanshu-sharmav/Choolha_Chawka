@@ -121,9 +121,6 @@ if env('DATABASE_URL', default=None):
         'sslmode': 'require',
         'connect_timeout': 30,  # Increased from 10 to 30 seconds
         'application_name': 'choolha_chawka',
-        # Connection pool settings
-        'MAX_CONNS': 20,
-        'MIN_CONNS': 1,
     }
     
     DATABASES['default']['ATOMIC_REQUESTS'] = True
