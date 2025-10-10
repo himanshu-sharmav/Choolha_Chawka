@@ -227,42 +227,44 @@ def async_send_password_reset_email(self, user_id, uidb64, token):
         html_message = render_to_string('notifications/email/password_reset.html', context)
         text_message = strip_tags(html_message)
 
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        msg.attach_alternative(html_message, "text/html")
-        msg.send()
-        
-        logger.info(f"✅ [async_send_password_reset_email] Email sent to {user.email}")
-        
-    except Exception as e:
-        logger.error(f"❌ [async_send_password_reset_email] Failed for user_id {user_id}: {str(e)}")
-    logger.info(f"🚀 [async_send_password_reset_email] Starting for user_id: {user_id}")
-    try:
-        user = _get_user(user_id)
-        context = {
-            'user': user,
-            'user_name': user.get_full_name() or user.username,
-            'reset_url': f"{getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')}/reset-password/{uidb64}/{token}/",
-        }
-        
-        subject = render_to_string('notifications/subjects/password_reset.txt', context).strip()
-        html_message = render_to_string('notifications/email/password_reset.html', context)
-        text_message = strip_tags(html_message)
-
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        msg.attach_alternative(html_message, "text/html")
-        msg.send()
-        
-        logger.info(f"✅ [async_send_password_reset_email] Email sent to {user.email}")
+        # Use Resend API instead of SMTP for better reliability
+        try:
+            from notifications.resend_api import send_email_via_resend_api
+            success, result = send_email_via_resend_api(
+                to_email=user.email,
+                subject=subject,
+                html_content=html_message,
+                text_content=text_message
+            )
+            if success:
+                logger.info(f"✅ [async_send_password_reset_email] Email sent via Resend API to {user.email}")
+            else:
+                logger.error(f"❌ [async_send_password_reset_email] Resend API failed for {user.email}: {result}")
+                # Fallback to SMTP
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_password_reset_email] Email sent via SMTP fallback to {user.email}")
+        except Exception as email_error:
+            logger.error(f"❌ [async_send_password_reset_email] Email sending failed for {user.email}: {str(email_error)}")
+            # Try SMTP fallback
+            try:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_password_reset_email] Email sent via SMTP fallback to {user.email}")
+            except Exception as smtp_error:
+                logger.error(f"❌ [async_send_password_reset_email] Both Resend API and SMTP failed for {user.email}: {str(smtp_error)}")
         
     except Exception as e:
         logger.error(f"❌ [async_send_password_reset_email] Failed for user_id {user_id}: {str(e)}")
