@@ -7,6 +7,13 @@ from django.utils.html import strip_tags
 import logging
 
 logger = logging.getLogger(__name__)
+from django.core.mail import send_mail, EmailMultiAlternatives
+from django.conf import settings
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+import logging
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -14,10 +21,14 @@ def _get_user(pk):
     return User.objects.get(id=pk)
 
 # Authentication and Profile Tasks
-@shared_task
-def async_send_welcome_email(user_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_welcome_email(self, user_id):
     logger.info(f"🚀 [async_send_welcome_email] Starting for user_id: {user_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         context = {
             'user': user,
@@ -32,26 +43,61 @@ def async_send_welcome_email(user_id):
         html_message = render_to_string('notifications/email/welcome.html', context)
         text_message = strip_tags(html_message)
 
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        msg.attach_alternative(html_message, "text/html")
-        result = msg.send()
-        
-        logger.info(f"✅ [async_send_welcome_email] Email sent to {user.email}, result: {result}")
-        return f"Welcome email sent to {user.email}"
+        # Use Resend API instead of SMTP for better reliability
+        try:
+            from notifications.resend_api import send_email_via_resend_api
+            success, result = send_email_via_resend_api(
+                to_email=user.email,
+                subject=subject,
+                html_content=html_message,
+                text_content=text_message
+            )
+            if success:
+                logger.info(f"✅ [async_send_welcome_email] Email sent via Resend API to {user.email}")
+                return f"Welcome email sent to {user.email}"
+            else:
+                logger.error(f"❌ [async_send_welcome_email] Resend API failed for {user.email}: {result}")
+                # Fallback to SMTP
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                result = msg.send()
+                logger.info(f"✅ [async_send_welcome_email] Email sent via SMTP fallback to {user.email}")
+                return f"Welcome email sent to {user.email}"
+        except Exception as email_error:
+            logger.error(f"❌ [async_send_welcome_email] Email sending failed for {user.email}: {str(email_error)}")
+            # Try SMTP fallback
+            try:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                result = msg.send()
+                logger.info(f"✅ [async_send_welcome_email] Email sent via SMTP fallback to {user.email}")
+                return f"Welcome email sent to {user.email}"
+            except Exception as smtp_error:
+                logger.error(f"❌ [async_send_welcome_email] Both Resend API and SMTP failed for {user.email}: {str(smtp_error)}")
+                return f"Welcome email failed: {str(smtp_error)}"
         
     except Exception as e:
         logger.error(f"❌ [async_send_welcome_email] Failed for user_id {user_id}: {str(e)}")
         return f"Welcome email failed: {str(e)}"
 
-@shared_task
-def async_send_profile_complete_email(user_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_profile_complete_email(self, user_id):
     logger.info(f"🚀 [async_send_profile_complete_email] Starting for user_id: {user_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         context = {
             'user': user,
@@ -63,24 +109,56 @@ def async_send_profile_complete_email(user_id):
         html_message = render_to_string('notifications/email/profile_complete.html', context)
         text_message = strip_tags(html_message)
 
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        msg.attach_alternative(html_message, "text/html")
-        msg.send()
-        
-        logger.info(f"✅ [async_send_profile_complete_email] Email sent to {user.email}")
+        # Use Resend API instead of SMTP for better reliability
+        try:
+            from notifications.resend_api import send_email_via_resend_api
+            success, result = send_email_via_resend_api(
+                to_email=user.email,
+                subject=subject,
+                html_content=html_message,
+                text_content=text_message
+            )
+            if success:
+                logger.info(f"✅ [async_send_profile_complete_email] Email sent via Resend API to {user.email}")
+            else:
+                logger.error(f"❌ [async_send_profile_complete_email] Resend API failed for {user.email}: {result}")
+                # Fallback to SMTP
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_profile_complete_email] Email sent via SMTP fallback to {user.email}")
+        except Exception as email_error:
+            logger.error(f"❌ [async_send_profile_complete_email] Email sending failed for {user.email}: {str(email_error)}")
+            # Try SMTP fallback
+            try:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_profile_complete_email] Email sent via SMTP fallback to {user.email}")
+            except Exception as smtp_error:
+                logger.error(f"❌ [async_send_profile_complete_email] Both Resend API and SMTP failed for {user.email}: {str(smtp_error)}")
         
     except Exception as e:
         logger.error(f"❌ [async_send_profile_complete_email] Failed for user_id {user_id}: {str(e)}")
 
-@shared_task
-def async_send_password_changed_email(user_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_password_changed_email(self, user_id):
     logger.info(f"🚀 [async_send_password_changed_email] Starting for user_id: {user_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         context = {
             'user': user,
@@ -92,24 +170,56 @@ def async_send_password_changed_email(user_id):
         html_message = render_to_string('notifications/email/password_changed.html', context)
         text_message = strip_tags(html_message)
 
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        msg.attach_alternative(html_message, "text/html")
-        msg.send()
-        
-        logger.info(f"✅ [async_send_password_changed_email] Email sent to {user.email}")
+        # Use Resend API instead of SMTP for better reliability
+        try:
+            from notifications.resend_api import send_email_via_resend_api
+            success, result = send_email_via_resend_api(
+                to_email=user.email,
+                subject=subject,
+                html_content=html_message,
+                text_content=text_message
+            )
+            if success:
+                logger.info(f"✅ [async_send_password_changed_email] Email sent via Resend API to {user.email}")
+            else:
+                logger.error(f"❌ [async_send_password_changed_email] Resend API failed for {user.email}: {result}")
+                # Fallback to SMTP
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_password_changed_email] Email sent via SMTP fallback to {user.email}")
+        except Exception as email_error:
+            logger.error(f"❌ [async_send_password_changed_email] Email sending failed for {user.email}: {str(email_error)}")
+            # Try SMTP fallback
+            try:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_password_changed_email] Email sent via SMTP fallback to {user.email}")
+            except Exception as smtp_error:
+                logger.error(f"❌ [async_send_password_changed_email] Both Resend API and SMTP failed for {user.email}: {str(smtp_error)}")
         
     except Exception as e:
         logger.error(f"❌ [async_send_password_changed_email] Failed for user_id {user_id}: {str(e)}")
 
-@shared_task
-def async_send_password_reset_email(user_id, uidb64, token):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_password_reset_email(self, user_id, uidb64, token):
     logger.info(f"🚀 [async_send_password_reset_email] Starting for user_id: {user_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         context = {
             'user': user,
@@ -121,25 +231,57 @@ def async_send_password_reset_email(user_id, uidb64, token):
         html_message = render_to_string('notifications/email/password_reset.html', context)
         text_message = strip_tags(html_message)
 
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        msg.attach_alternative(html_message, "text/html")
-        msg.send()
-        
-        logger.info(f"✅ [async_send_password_reset_email] Email sent to {user.email}")
+        # Use Resend API instead of SMTP for better reliability
+        try:
+            from notifications.resend_api import send_email_via_resend_api
+            success, result = send_email_via_resend_api(
+                to_email=user.email,
+                subject=subject,
+                html_content=html_message,
+                text_content=text_message
+            )
+            if success:
+                logger.info(f"✅ [async_send_password_reset_email] Email sent via Resend API to {user.email}")
+            else:
+                logger.error(f"❌ [async_send_password_reset_email] Resend API failed for {user.email}: {result}")
+                # Fallback to SMTP
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_password_reset_email] Email sent via SMTP fallback to {user.email}")
+        except Exception as email_error:
+            logger.error(f"❌ [async_send_password_reset_email] Email sending failed for {user.email}: {str(email_error)}")
+            # Try SMTP fallback
+            try:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_password_reset_email] Email sent via SMTP fallback to {user.email}")
+            except Exception as smtp_error:
+                logger.error(f"❌ [async_send_password_reset_email] Both Resend API and SMTP failed for {user.email}: {str(smtp_error)}")
         
     except Exception as e:
         logger.error(f"❌ [async_send_password_reset_email] Failed for user_id {user_id}: {str(e)}")
 
 # Subscription Tasks
-@shared_task
-def async_send_subscription_created_email(user_id, subscription_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_subscription_created_email(self, user_id, subscription_id):
     logger.info(f"🚀 [async_send_subscription_created_email] Starting for user_id: {user_id}, subscription_id: {subscription_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         from subscriptions.models import Subscription
         subscription = Subscription.objects.get(id=subscription_id)
@@ -157,24 +299,56 @@ def async_send_subscription_created_email(user_id, subscription_id):
         html_message = render_to_string('notifications/email/subscription_created.html', context)
         text_message = strip_tags(html_message)
 
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        msg.attach_alternative(html_message, "text/html")
-        msg.send()
-        
-        logger.info(f"✅ [async_send_subscription_created_email] Email sent to {user.email}")
+        # Use Resend API instead of SMTP for better reliability
+        try:
+            from notifications.resend_api import send_email_via_resend_api
+            success, result = send_email_via_resend_api(
+                to_email=user.email,
+                subject=subject,
+                html_content=html_message,
+                text_content=text_message
+            )
+            if success:
+                logger.info(f"✅ [async_send_subscription_created_email] Email sent via Resend API to {user.email}")
+            else:
+                logger.error(f"❌ [async_send_subscription_created_email] Resend API failed for {user.email}: {result}")
+                # Fallback to SMTP
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_subscription_created_email] Email sent via SMTP fallback to {user.email}")
+        except Exception as email_error:
+            logger.error(f"❌ [async_send_subscription_created_email] Email sending failed for {user.email}: {str(email_error)}")
+            # Try SMTP fallback
+            try:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_subscription_created_email] Email sent via SMTP fallback to {user.email}")
+            except Exception as smtp_error:
+                logger.error(f"❌ [async_send_subscription_created_email] Both Resend API and SMTP failed for {user.email}: {str(smtp_error)}")
         
     except Exception as e:
         logger.error(f"❌ [async_send_subscription_created_email] Failed for user_id {user_id}: {str(e)}")
 
-@shared_task
-def async_send_subscription_cancelled_email(user_id, subscription_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_subscription_cancelled_email(self, user_id, subscription_id):
     logger.info(f"🚀 [async_send_subscription_cancelled_email] Starting for user_id: {user_id}, subscription_id: {subscription_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         from subscriptions.models import Subscription
         subscription = Subscription.objects.get(id=subscription_id)
@@ -207,10 +381,14 @@ def async_send_subscription_cancelled_email(user_id, subscription_id):
     except Exception as e:
         logger.error(f"❌ [async_send_subscription_cancelled_email] Failed for user_id {user_id}: {str(e)}")
 
-@shared_task
-def async_send_subscription_renewed_email(user_id, subscription_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_subscription_renewed_email(self, user_id, subscription_id):
     logger.info(f"🚀 [async_send_subscription_renewed_email] Starting for user_id: {user_id}, subscription_id: {subscription_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         from subscriptions.models import Subscription
         subscription = Subscription.objects.get(id=subscription_id)
@@ -278,46 +456,16 @@ def async_send_subscription_expiring_email(user_id, subscription_id):
     except Exception as e:
         logger.error(f"❌ [async_send_subscription_expiring_email] Failed for user_id {user_id}: {str(e)}")
 
-@shared_task
-def async_send_subscription_expired_email(user_id, subscription_id):
-    logger.info(f"🚀 [async_send_subscription_expired_email] Starting for user_id: {user_id}, subscription_id: {subscription_id}")
-    try:
-        user = _get_user(user_id)
-        from subscriptions.models import Subscription
-        subscription = Subscription.objects.get(id=subscription_id)
-        
-        context = {
-            'user': user,
-            'user_name': user.get_full_name() or user.username,
-            'subscription': subscription,
-            'plan_name': subscription.plan.name,
-            'expired_date': subscription.adjusted_end_date,
-            'renew_url': f"{getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')}/plans",
-        }
-        
-        subject = render_to_string('notifications/subjects/subscription_expired.txt', context).strip()
-        html_message = render_to_string('notifications/email/subscription_expired.html', context)
-        text_message = strip_tags(html_message)
-
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        msg.attach_alternative(html_message, "text/html")
-        msg.send()
-        
-        logger.info(f"✅ [async_send_subscription_expired_email] Email sent to {user.email}")
-        
-    except Exception as e:
-        logger.error(f"❌ [async_send_subscription_expired_email] Failed for user_id {user_id}: {str(e)}")
 
 # Leave Management Tasks
-@shared_task
-def async_send_leave_submitted_email(user_id, leave_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_leave_submitted_email(self, user_id, leave_id):
     logger.info(f"🚀 [async_send_leave_submitted_email] Starting for user_id: {user_id}, leave_id: {leave_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         from subscriptions.models import Leave
         leave = Leave.objects.get(id=leave_id)
@@ -335,24 +483,56 @@ def async_send_leave_submitted_email(user_id, leave_id):
         html_message = render_to_string('notifications/email/leave_submitted.html', context)
         text_message = strip_tags(html_message)
 
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        msg.attach_alternative(html_message, "text/html")
-        msg.send()
-        
-        logger.info(f"✅ [async_send_leave_submitted_email] Email sent to {user.email}")
+        # Use Resend API instead of SMTP for better reliability
+        try:
+            from notifications.resend_api import send_email_via_resend_api
+            success, result = send_email_via_resend_api(
+                to_email=user.email,
+                subject=subject,
+                html_content=html_message,
+                text_content=text_message
+            )
+            if success:
+                logger.info(f"✅ [async_send_leave_submitted_email] Email sent via Resend API to {user.email}")
+            else:
+                logger.error(f"❌ [async_send_leave_submitted_email] Resend API failed for {user.email}: {result}")
+                # Fallback to SMTP
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_leave_submitted_email] Email sent via SMTP fallback to {user.email}")
+        except Exception as email_error:
+            logger.error(f"❌ [async_send_leave_submitted_email] Email sending failed for {user.email}: {str(email_error)}")
+            # Try SMTP fallback
+            try:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_leave_submitted_email] Email sent via SMTP fallback to {user.email}")
+            except Exception as smtp_error:
+                logger.error(f"❌ [async_send_leave_submitted_email] Both Resend API and SMTP failed for {user.email}: {str(smtp_error)}")
         
     except Exception as e:
         logger.error(f"❌ [async_send_leave_submitted_email] Failed for user_id {user_id}: {str(e)}")
 
-@shared_task
-def async_send_leave_approved_email(user_id, leave_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_leave_approved_email(self, user_id, leave_id):
     logger.info(f"🚀 [async_send_leave_approved_email] Starting for user_id: {user_id}, leave_id: {leave_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         from subscriptions.models import Leave
         leave = Leave.objects.get(id=leave_id)
@@ -371,24 +551,56 @@ def async_send_leave_approved_email(user_id, leave_id):
         html_message = render_to_string('notifications/email/leave_approved.html', context)
         text_message = strip_tags(html_message)
 
-        msg = EmailMultiAlternatives(
-            subject=subject,
-            body=text_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        msg.attach_alternative(html_message, "text/html")
-        msg.send()
-        
-        logger.info(f"✅ [async_send_leave_approved_email] Email sent to {user.email}")
+        # Use Resend API instead of SMTP for better reliability
+        try:
+            from notifications.resend_api import send_email_via_resend_api
+            success, result = send_email_via_resend_api(
+                to_email=user.email,
+                subject=subject,
+                html_content=html_message,
+                text_content=text_message
+            )
+            if success:
+                logger.info(f"✅ [async_send_leave_approved_email] Email sent via Resend API to {user.email}")
+            else:
+                logger.error(f"❌ [async_send_leave_approved_email] Resend API failed for {user.email}: {result}")
+                # Fallback to SMTP
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_leave_approved_email] Email sent via SMTP fallback to {user.email}")
+        except Exception as email_error:
+            logger.error(f"❌ [async_send_leave_approved_email] Email sending failed for {user.email}: {str(email_error)}")
+            # Try SMTP fallback
+            try:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_message, "text/html")
+                msg.send()
+                logger.info(f"✅ [async_send_leave_approved_email] Email sent via SMTP fallback to {user.email}")
+            except Exception as smtp_error:
+                logger.error(f"❌ [async_send_leave_approved_email] Both Resend API and SMTP failed for {user.email}: {str(smtp_error)}")
         
     except Exception as e:
         logger.error(f"❌ [async_send_leave_approved_email] Failed for user_id {user_id}: {str(e)}")
 
-@shared_task
-def async_send_leave_rejected_email(user_id, leave_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_leave_rejected_email(self, user_id, leave_id):
     logger.info(f"🚀 [async_send_leave_rejected_email] Starting for user_id: {user_id}, leave_id: {leave_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         from subscriptions.models import Leave
         leave = Leave.objects.get(id=leave_id)
@@ -422,10 +634,14 @@ def async_send_leave_rejected_email(user_id, leave_id):
         logger.error(f"❌ [async_send_leave_rejected_email] Failed for user_id {user_id}: {str(e)}")
 
 # Payment Tasks
-@shared_task
-def async_send_payment_success_email(user_id, subscription_id, payment_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_payment_success_email(self, user_id, subscription_id, payment_id):
     logger.info(f"🚀 [async_send_payment_success_email] Starting for user_id: {user_id}, subscription_id: {subscription_id}, payment_id: {payment_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         from subscriptions.models import Subscription
         from payments.models import Payment
@@ -612,10 +828,14 @@ def async_send_refund_rejected_email(user_id, refund_id):
         logger.error(f"❌ [async_send_refund_rejected_email] Failed for user_id {user_id}: {str(e)}")
 
 # Mess Owner Notification Tasks
-@shared_task
-def async_send_new_user_joined_email(mess_owner_ids, user_id, subscription_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 30})
+def async_send_new_user_joined_email(self, mess_owner_ids, user_id, subscription_id):
     logger.info(f"🚀 [async_send_new_user_joined_email] Starting for mess_owner_ids: {mess_owner_ids}, user_id: {user_id}, subscription_id: {subscription_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         from subscriptions.models import Subscription
         subscription = Subscription.objects.get(id=subscription_id)
@@ -640,16 +860,44 @@ def async_send_new_user_joined_email(mess_owner_ids, user_id, subscription_id):
                 'user_name': owner.get_full_name() or owner.username,
             })
             
-            msg = EmailMultiAlternatives(
-                subject=subject,
-                body=text_message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[owner.email]
-            )
-            msg.attach_alternative(html_message, "text/html")
-            msg.send()
-            
-            logger.info(f"✅ [async_send_new_user_joined_email] Email sent to mess owner {owner.email}")
+            # Use Resend API instead of SMTP for better reliability
+            try:
+                from notifications.resend_api import send_email_via_resend_api
+                success, result = send_email_via_resend_api(
+                    to_email=owner.email,
+                    subject=subject,
+                    html_content=html_message,
+                    text_content=text_message
+                )
+                if success:
+                    logger.info(f"✅ [async_send_new_user_joined_email] Email sent via Resend API to mess owner {owner.email}")
+                else:
+                    logger.error(f"❌ [async_send_new_user_joined_email] Resend API failed for {owner.email}: {result}")
+                    # Fallback to SMTP
+                    msg = EmailMultiAlternatives(
+                        subject=subject,
+                        body=text_message,
+                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                        to=[owner.email]
+                    )
+                    msg.attach_alternative(html_message, "text/html")
+                    msg.send()
+                    logger.info(f"✅ [async_send_new_user_joined_email] Email sent via SMTP fallback to mess owner {owner.email}")
+            except Exception as email_error:
+                logger.error(f"❌ [async_send_new_user_joined_email] Email sending failed for {owner.email}: {str(email_error)}")
+                # Try SMTP fallback
+                try:
+                    msg = EmailMultiAlternatives(
+                        subject=subject,
+                        body=text_message,
+                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@choolhachowka.com'),
+                        to=[owner.email]
+                    )
+                    msg.attach_alternative(html_message, "text/html")
+                    msg.send()
+                    logger.info(f"✅ [async_send_new_user_joined_email] Email sent via SMTP fallback to mess owner {owner.email}")
+                except Exception as smtp_error:
+                    logger.error(f"❌ [async_send_new_user_joined_email] Both Resend API and SMTP failed for {owner.email}: {str(smtp_error)}")
         
     except Exception as e:
         logger.error(f"❌ [async_send_new_user_joined_email] Failed for mess_owner_ids {mess_owner_ids}: {str(e)}")

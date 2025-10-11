@@ -110,14 +110,17 @@ if env('DATABASE_URL', default=None):
         'default': dj_database_url.config(
             default=env('DATABASE_URL'),
             conn_max_age=600,
-            engine='dj_db_conn_pool.backends.postgresql'
+            engine='dj_db_conn_pool.backends.postgresql',
+            # Connection pool settings for production
+            conn_health_checks=True,
         )
     }
     
     # Fixed PostgreSQL options
     DATABASES['default']['OPTIONS'] = {
         'sslmode': 'require',
-        'connect_timeout': 10,
+        'connect_timeout': 30,  # Increased from 10 to 30 seconds
+        'application_name': 'choolha_chawka',
     }
     
     DATABASES['default']['ATOMIC_REQUESTS'] = True
@@ -135,7 +138,8 @@ else:
             'CONN_MAX_AGE': 300,
             'ATOMIC_REQUESTS': True,
             'OPTIONS': {
-                'connect_timeout': 5,
+                'connect_timeout': 30,  # Increased from 5 to 30 seconds
+                'application_name': 'choolha_chawka_dev',
             }
         }
     }
@@ -252,17 +256,33 @@ REDIS_URL = env("REDIS_URL", default="redis://localhost:6379")
 CELERY_BROKER_URL = CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_TASK_ALWAYS_EAGER = False
 
+# Celery connection and timeout settings
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BROKER_CONNECTION_TIMEOUT = 30
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    'socket_timeout': 30,
+    'socket_connect_timeout': 30,
+    'retry_on_timeout': True,
+}
+
+# Task execution settings
+CELERY_TASK_SOFT_TIME_LIMIT = 300  # 5 minutes
+CELERY_TASK_TIME_LIMIT = 600  # 10 minutes
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
 # Celery Beat Configuration for Periodic Tasks
 CELERY_BEAT_SCHEDULE = {
     'update-expired-subscriptions': {
         'task': 'subscriptions.tasks.update_expired_subscriptions',
-        'schedule': 60.0 * 60,  # Run every hour
+        'schedule': 60.0 * 60 * 24,  # Run every 24 hours
     },
     'send-expiry-notifications': {
-        'task': 'notifications.tasks.send_expiry_notifications',
-        'schedule': 60.0 * 60 * 24,  # Run daily at midnight
+        'task': 'subscriptions.tasks.send_expiry_notifications',
+        'schedule': 60.0 * 60 * 24,  # Run every 24 hours
     },
 }
+
 CELERY_TIMEZONE = 'Asia/Kolkata'
 
 # Twilio settings
@@ -300,21 +320,22 @@ CLOUDINARY_STORAGE = {
 MEDIA_URL = '/media/'
 
 
-# Resend Email Config
-# settings.py - Resend SMTP Configuration
+# Resend Email Config - Using Resend Library instead of SMTP
+RESEND_API_KEY = env('RESEND_API_KEY')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@choolhachowka.com')
+SERVER_EMAIL = env('SERVER_EMAIL', default='noreply@choolhachowka.com')
+
+# Keep SMTP as fallback (but we'll use Resend API primarily)
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.resend.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'resend'  # This is literally the string 'resend'
-EMAIL_HOST_PASSWORD = env('RESEND_API_KEY')  # Your Resend API key
-# DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'  # Your verified domain
-SERVER_EMAIL = env('SERVER_EMAIL', default='noreply@choolhachowka.com')
-
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@choolhachowka.com')
-
-# DEFAULT_FROM_EMAIL = 'noreply@choolhachowka.com'
+EMAIL_HOST_USER = 'resend'
+EMAIL_HOST_PASSWORD = RESEND_API_KEY
+EMAIL_TIMEOUT = 30
 EMAIL_USE_LOCALTIME = False
+
+# Remove duplicate - already set above
 SUPPORT_EMAIL = env('SUPPORT_EMAIL', default='Choolhachowka.com')
 WHITENOISE_USE_FINDERS = True
 
