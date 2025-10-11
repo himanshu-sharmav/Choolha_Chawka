@@ -69,7 +69,7 @@ def send_expiry_notifications():
     logger.info("📧 Starting send_expiry_notifications task")
     
     try:
-        # Call the management command
+        # Call the management command from notifications app
         call_command('send_expiry_notifications')
         
         logger.info("✅ Successfully completed send_expiry_notifications task")

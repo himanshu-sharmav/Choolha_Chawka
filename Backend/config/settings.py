@@ -278,7 +278,7 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 60.0 * 60 * 24,  # Run every 24 hours
     },
     'send-expiry-notifications': {
-        'task': 'notifications.tasks.send_expiry_notifications',
+        'task': 'subscriptions.tasks.send_expiry_notifications',
         'schedule': 60.0 * 60 * 24,  # Run every 24 hours
     },
 }
