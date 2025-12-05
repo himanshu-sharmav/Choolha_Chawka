@@ -341,3 +341,25 @@ class LeaveAdminSerializer(serializers.ModelSerializer):
     
     def get_user_phone(self, obj):
         return obj.subscription.user.phone
+
+
+class ModifySubscriptionDaysSerializer(serializers.Serializer):
+    """Serializer for owner to modify subscription days"""
+    days_to_add = serializers.IntegerField(
+        required=True,
+        help_text="Number of days to add (use negative value to remove days)"
+    )
+    reason = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=500,
+        help_text="Reason for modifying subscription days"
+    )
+    
+    def validate_days_to_add(self, value):
+        """Validate days_to_add is within reasonable range"""
+        if value == 0:
+            raise serializers.ValidationError("days_to_add cannot be zero")
+        if abs(value) > 365:
+            raise serializers.ValidationError("Cannot modify by more than 365 days at once")
+        return value

@@ -31,34 +31,43 @@ class User(AbstractUser):
     preferred_delivery_time = models.CharField(max_length=100, blank=True)
     
     def generate_otp(self):
-        """Generate a new OTP and set expiry time"""
-        otp = ''.join(random.choices('0123456789', k=6))
-        self.phone_verification_otp = otp
-        self.otp_expiry = timezone.now() + timezone.timedelta(minutes=15)
-        self.save(update_fields=['phone_verification_otp', 'otp_expiry'])
+        """Generate a new OTP using Redis (memory efficient)"""
+        from core.otp_service import OTPService
+        
+        # Use user ID as identifier for OTP
+        identifier = f"user_{self.id}"
+        otp = OTPService.generate_otp(identifier)
+        
         return otp
     
     def verify_otp(self, otp):
-        """Verify the OTP and mark phone as verified if correct"""
-        if timezone.now() > self.otp_expiry:
-            return False, "OTP has expired"
+        """Verify the OTP from Redis and mark phone as verified if correct"""
+        from core.otp_service import OTPService
         
-        if self.phone_verification_otp != otp:
-            return False, "Invalid OTP"
+        identifier = f"user_{self.id}"
+        is_valid, message = OTPService.verify_otp(identifier, otp)
         
-        self.phone_verified = True
-        self.phone_verification_otp = ''
-        # Auto-complete status for mess owners
-        if self.user_type == 'mess_owner':
-            self.status = 'profile_complete'
-        else:
-            self.status = 'registration_complete'
-        self.save(update_fields=['phone_verified', 'phone_verification_otp', 'status'])
-        return True, "Phone verified successfully"
+        if is_valid:
+            self.phone_verified = True
+            # Auto-complete status for mess owners
+            if self.user_type == 'mess_owner':
+                self.status = 'profile_complete'
+            else:
+                self.status = 'registration_complete'
+            self.save(update_fields=['phone_verified', 'status'])
+        
+        return is_valid, message
     
     def generate_and_send_otp(self):
-        """Generate an OTP, save it, and send via SMS"""
+        """Generate an OTP, store in Redis, and send via SMS"""
         from core.sms import send_otp
+        from core.otp_service import OTPService
+        
+        # Check throttling
+        can_send, message = OTPService.can_send_otp(self.phone)
+        if not can_send:
+            return None, False
+        
         otp = self.generate_otp()
         
         # Send OTP via SMS
