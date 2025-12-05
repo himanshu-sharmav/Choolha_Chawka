@@ -8,7 +8,7 @@ from core.permissions import IsMessOwner, IsCustomer
 from .models import Plan, Subscription, Leave
 from .serializers import (
     PlanSerializer,PlanCreateSerializer, SubscriptionSerializer, SubscriptionCreateSerializer,
-    LeaveSerializer, LeaveCreateSerializer, LeaveAdminSerializer
+    LeaveSerializer, LeaveCreateSerializer, LeaveAdminSerializer, ModifySubscriptionDaysSerializer
 )
 from notifications.services import (
     send_subscription_created_email, send_leave_submitted_email,
@@ -111,6 +111,11 @@ class SubscriptionViewSet(ListRetrieveCacheMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         if not self.request.user.is_authenticated:
             return Subscription.objects.none()  # Return an empty queryset if not authenticated
+        
+        # Allow mess owners to access all subscriptions for modify_days action
+        if self.action == 'modify_days' and self.request.user.user_type == 'mess_owner':
+            return Subscription.objects.select_related('plan', 'user', 'refund_request')
+        
         return Subscription.objects.select_related(
             'plan', 'user','refund_request'
         ).filter(user=self.request.user)
@@ -248,7 +253,95 @@ class SubscriptionViewSet(ListRetrieveCacheMixin, viewsets.ModelViewSet):
             'subscription': SubscriptionSerializer(subscription).data
         })
 
-
+    @action(detail=True, methods=['post'], permission_classes=[IsMessOwner])
+    def modify_days(self, request, pk=None):
+        """
+        Owner endpoint to modify subscription days for any user.
+        
+        Allows mess owners to add or remove days from a user's subscription.
+        Useful for:
+        - Compensating users for service issues
+        - Adjusting for holidays or closures
+        - Manual corrections
+        
+        Request body:
+        {
+            "days_to_add": 5,  // Use negative value to remove days (e.g., -3)
+            "reason": "Compensation for service disruption"  // Optional
+        }
+        """
+        subscription = self.get_object()
+        
+        # Validate request data
+        serializer = ModifySubscriptionDaysSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({
+                'success': False,
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        days_to_add = serializer.validated_data['days_to_add']
+        reason = serializer.validated_data.get('reason', '')
+        
+        # Store original values for logging
+        original_end_date = subscription.adjusted_end_date
+        original_status = subscription.status
+        
+        # Calculate new end date
+        new_end_date = subscription.adjusted_end_date + timedelta(days=days_to_add)
+        
+        # Validate that new end date is not in the past
+        today = timezone.now().date()
+        if new_end_date < today:
+            return Response({
+                'success': False,
+                'message': f'Cannot set end date to the past. New end date would be {new_end_date}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update subscription
+        subscription.adjusted_end_date = new_end_date
+        
+        # If subscription was expired but now has future date, reactivate it
+        status_changed = False
+        if subscription.status == 'EXPIRED' and new_end_date >= today:
+            subscription.status = 'ACTIVE'
+            status_changed = True
+        
+        subscription.save()
+        
+        # Log the modification
+        action_type = "added" if days_to_add > 0 else "removed"
+        days_abs = abs(days_to_add)
+        
+        message = f'Successfully {action_type} {days_abs} day(s) to subscription for {subscription.user.username}'
+        if status_changed:
+            message += f' and reactivated subscription (was {original_status})'
+        
+        return Response({
+            'success': True,
+            'message': message,
+            'subscription_id': subscription.id,
+            'user': {
+                'id': subscription.user.id,
+                'username': subscription.user.username,
+                'email': subscription.user.email,
+                'phone': subscription.user.phone
+            },
+            'modification': {
+                'original_end_date': original_end_date,
+                'new_end_date': subscription.adjusted_end_date,
+                'days_modified': days_to_add,
+                'reason': reason,
+                'modified_by': request.user.username,
+                'modified_at': timezone.now()
+            },
+            'status': {
+                'original': original_status,
+                'current': subscription.status,
+                'changed': status_changed
+            },
+            'subscription': SubscriptionSerializer(subscription).data
+        })
 
 
 class LeaveViewSet(ListRetrieveCacheMixin, viewsets.ModelViewSet):

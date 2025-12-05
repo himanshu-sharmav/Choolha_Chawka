@@ -276,11 +276,15 @@ CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_BEAT_SCHEDULE = {
     'update-expired-subscriptions': {
         'task': 'subscriptions.tasks.update_expired_subscriptions',
-        'schedule': crontab(hour=0, minute=0),  # Run at midnight (00:00) every day
+        'schedule': crontab(hour=0, minute=0),  # Run at midnight every day
     },
     'send-expiry-notifications': {
         'task': 'subscriptions.tasks.send_expiry_notifications',
         'schedule': crontab(hour=9, minute=0),  # Run at 9 AM every day
+    },
+    'cleanup-old-otp-records': {
+        'task': 'accounts.tasks.cleanup_old_otp_records',
+        'schedule': crontab(hour=2, minute=0),  # Run at 2 AM every day
     },
 }
 
