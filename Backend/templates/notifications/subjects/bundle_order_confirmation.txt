@@ -1,0 +1,1 @@
+🎉 Order Confirmed - {{ subscription_count }} Plan(s) Activated | {{ platform_name }}

@@ -2,6 +2,8 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
+from decimal import Decimal
+
 
 class Plan(models.Model):
     SERVICE_TYPE_CHOICES = [
@@ -15,18 +17,141 @@ class Plan(models.Model):
     service_type = models.CharField(max_length=10, choices=SERVICE_TYPE_CHOICES)
     base_price = models.PositiveIntegerField()
     included_meals = models.JSONField(default=list)  # e.g. ["lunch", "dinner"]
-    can_add_breakfast = models.BooleanField(default=True)
-    breakfast_addon_price = models.PositiveIntegerField(default=600)
-    duration_days = models.PositiveIntegerField(default=30)  # Subscription duration
+    duration_days = models.PositiveIntegerField(default=30)  # Default subscription duration
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    # Custom duration constraint fields
+    min_duration_days = models.PositiveIntegerField(default=7)
+    max_duration_days = models.PositiveIntegerField(default=90)
+    allow_custom_duration = models.BooleanField(default=True)
+    daily_rate_override = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Optional: Override calculated daily rate"
+    )
+
+    def get_daily_rate(self) -> Decimal:
+        """Get daily rate (override or calculated from base_price)"""
+        if self.daily_rate_override:
+            return self.daily_rate_override
+        return Decimal(self.base_price) / Decimal(self.duration_days)
+    
+    def validate_duration(self, days: int) -> bool:
+        """Check if duration is within allowed range"""
+        if not self.allow_custom_duration:
+            return days == self.duration_days
+        return self.min_duration_days <= days <= self.max_duration_days
+    
+    def calculate_price_for_duration(self, days: int) -> int:
+        """Calculate price for a given duration"""
+        return int(round(self.get_daily_rate() * days))
 
     def __str__(self):
         return f"{self.name} ({self.service_type})"
 
     class Meta:
         ordering = ['service_type', 'base_price']
+
+
+class Cart(models.Model):
+    """User's shopping cart for meal plans"""
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE, 
+        related_name='cart'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def get_total(self) -> int:
+        """Calculate total price of all items in cart"""
+        return sum(item.calculated_price for item in self.items.all())
+    
+    def get_item_count(self) -> int:
+        """Get number of items in cart"""
+        return self.items.count()
+    
+    def clear(self) -> None:
+        """Remove all items from cart"""
+        self.items.all().delete()
+    
+    def __str__(self):
+        return f"Cart for {self.user.username} ({self.get_item_count()} items)"
+
+
+class CartItem(models.Model):
+    """Individual plan in user's cart with custom duration"""
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
+    plan = models.ForeignKey(Plan, on_delete=models.CASCADE)
+    custom_duration_days = models.PositiveIntegerField(default=30)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['cart', 'plan']  # One plan per cart
+    
+    @property
+    def daily_rate(self) -> Decimal:
+        """Calculate daily rate from plan's base price"""
+        return self.plan.get_daily_rate()
+    
+    @property
+    def calculated_price(self) -> int:
+        """Calculate price based on custom duration"""
+        return int(round(self.daily_rate * self.custom_duration_days))
+    
+    def __str__(self):
+        return f"{self.plan.name} ({self.custom_duration_days} days) - ₹{self.calculated_price}"
+
+
+class BundleOrder(models.Model):
+    """Groups multiple subscriptions from a single checkout"""
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending Payment'),
+        ('PAID', 'Paid'),
+        ('PARTIALLY_CANCELLED', 'Partially Cancelled'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+    
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE, 
+        related_name='bundle_orders'
+    )
+    total_amount = models.PositiveIntegerField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    razorpay_order_id = models.CharField(max_length=100, blank=True)
+    razorpay_payment_id = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    
+    def get_subscription_count(self) -> int:
+        """Get number of subscriptions in this bundle"""
+        return self.subscriptions.count()
+    
+    def update_status(self) -> None:
+        """Update status based on subscription statuses"""
+        subscriptions = self.subscriptions.all()
+        if not subscriptions.exists():
+            return
+            
+        cancelled_count = subscriptions.filter(status='CANCELLED').count()
+        total_count = subscriptions.count()
+        
+        if cancelled_count == 0:
+            self.status = 'PAID'
+        elif cancelled_count == total_count:
+            self.status = 'CANCELLED'
+        else:
+            self.status = 'PARTIALLY_CANCELLED'
+        self.save()
+    
+    def __str__(self):
+        return f"Bundle #{self.id} - {self.user.username} - ₹{self.total_amount}"
+    
+    class Meta:
+        ordering = ['-created_at']
 
 class Subscription(models.Model):
     STATUS_CHOICES = [
@@ -39,9 +164,14 @@ class Subscription(models.Model):
     
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='subscriptions')
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT)
-    breakfast_included = models.BooleanField(default=False)
+    bundle_order = models.ForeignKey(
+        BundleOrder, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='subscriptions'
+    )
     base_price = models.PositiveIntegerField()
-    breakfast_addon_price = models.PositiveIntegerField(default=0)
     total_paid = models.PositiveIntegerField()
     pending_payment_amount = models.DecimalField(
         max_digits=8, decimal_places=2, default=0,
