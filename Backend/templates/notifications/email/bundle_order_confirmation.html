@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Confirmation - {{ platform_name }}</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0;">🎉 Order Confirmed!</h1>
+    </div>
+    
+    <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+        <p>Hi {{ user_name }},</p>
+        
+        <p>Thank you for your order! Your payment has been successfully processed.</p>
+        
+        <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea;">
+            <h3 style="margin-top: 0; color: #667eea;">Order Summary</h3>
+            <p><strong>Order ID:</strong> #{{ bundle_order.id }}</p>
+            <p><strong>Total Amount:</strong> ₹{{ total_amount }}</p>
+            <p><strong>Plans Subscribed:</strong> {{ subscription_count }}</p>
+        </div>
+        
+        <h3 style="color: #333;">Your Subscriptions:</h3>
+        
+        {% for subscription in subscriptions %}
+        <div style="background: white; padding: 15px; border-radius: 8px; margin: 10px 0; border: 1px solid #eee;">
+            <h4 style="margin: 0 0 10px 0; color: #667eea;">{{ subscription.plan.name }}</h4>
+            <p style="margin: 5px 0;"><strong>Duration:</strong> {{ subscription.base_end_date|date:"M d, Y" }} - {{ subscription.adjusted_end_date|date:"M d, Y" }}</p>
+            <p style="margin: 5px 0;"><strong>Amount:</strong> ₹{{ subscription.total_paid }}</p>
+            <p style="margin: 5px 0;"><strong>Status:</strong> <span style="color: #28a745;">Active</span></p>
+        </div>
+        {% endfor %}
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{ dashboard_url }}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; display: inline-block;">View Dashboard</a>
+        </div>
+        
+        <p style="color: #666; font-size: 14px;">If you have any questions, feel free to contact us at {{ support_email }}.</p>
+        
+        <p>Enjoy your meals! 🍽️</p>
+        <p>- The {{ platform_name }} Team</p>
+    </div>
+</body>
+</html>

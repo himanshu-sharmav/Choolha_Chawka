@@ -4,17 +4,22 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
+from django.conf import settings
 from core.permissions import IsMessOwner, IsCustomer
-from .models import Plan, Subscription, Leave
+from .models import Plan, Subscription, Leave, Cart, CartItem, BundleOrder
 from .serializers import (
-    PlanSerializer,PlanCreateSerializer, SubscriptionSerializer, SubscriptionCreateSerializer,
-    LeaveSerializer, LeaveCreateSerializer, LeaveAdminSerializer, ModifySubscriptionDaysSerializer
+    PlanSerializer, PlanCreateSerializer, SubscriptionSerializer, SubscriptionCreateSerializer,
+    LeaveSerializer, LeaveCreateSerializer, LeaveAdminSerializer, ModifySubscriptionDaysSerializer,
+    CartSerializer, CartItemSerializer, AddToCartSerializer, UpdateDurationSerializer,
+    BundleOrderSerializer, BundleOrderListSerializer
 )
+from .services import CartService, CheckoutService, PricingEngine
 from notifications.services import (
     send_subscription_created_email, send_leave_submitted_email,
-    send_leave_approved_email, send_leave_rejected_email, send_new_user_joined_email,send_subscription_cancelled_email,send_subscription_renewed_email
+    send_leave_approved_email, send_leave_rejected_email, send_new_user_joined_email,
+    send_subscription_cancelled_email, send_subscription_renewed_email
 )
-from payments.models import RefundRequest,Payment
+from payments.models import RefundRequest, Payment
 from core.cache_service import cache_get, ListRetrieveCacheMixin
 
 class PlanViewSet(ListRetrieveCacheMixin, viewsets.ModelViewSet):
@@ -222,7 +227,7 @@ class SubscriptionViewSet(ListRetrieveCacheMixin, viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # Calculate renewal amount (same as original subscription pricing)
-        renewal_amount = subscription.base_price + subscription.breakfast_addon_price
+        renewal_amount = subscription.base_price
 
         # Calculate new end date from today
         renewal_days = subscription.plan.duration_days
@@ -469,6 +474,207 @@ class LeaveViewSet(ListRetrieveCacheMixin, viewsets.ModelViewSet):
             'total_leaves_this_month': queryset.filter(
                 requested_at__month=timezone.now().month,
                 requested_at__year=timezone.now().year
+            ).count(),
+        }
+        return Response(stats)
+
+
+class CartViewSet(viewsets.ViewSet):
+    """ViewSet for managing user's shopping cart"""
+    permission_classes = [IsCustomer]
+    
+    def list(self, request):
+        """Get current user's cart with all items"""
+        cart = CartService.get_or_create_cart(request.user)
+        serializer = CartSerializer(cart)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['post'])
+    def add(self, request):
+        """Add a plan to cart"""
+        serializer = AddToCartSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            item = CartService.add_item(
+                user=request.user,
+                plan_id=serializer.validated_data['plan_id'],
+                duration_days=serializer.validated_data['duration_days']
+            )
+            return Response({
+                'success': True,
+                'message': f"Added {item.plan.name} to cart",
+                'item': CartItemSerializer(item).data
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'errors': e.detail if hasattr(e, 'detail') else str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['patch'], url_path='update')
+    def update_duration(self, request, pk=None):
+        """Update duration for a cart item"""
+        serializer = UpdateDurationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            item = CartService.update_item_duration(
+                user=request.user,
+                item_id=int(pk),
+                duration_days=serializer.validated_data['duration_days']
+            )
+            return Response({
+                'success': True,
+                'message': f"Updated duration to {item.custom_duration_days} days",
+                'item': CartItemSerializer(item).data
+            })
+        except Exception as e:
+            return Response({
+                'success': False,
+                'errors': e.detail if hasattr(e, 'detail') else str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['delete'], url_path='remove')
+    def remove(self, request, pk=None):
+        """Remove an item from cart"""
+        deleted = CartService.remove_item(request.user, int(pk))
+        if deleted:
+            return Response({
+                'success': True,
+                'message': 'Item removed from cart'
+            })
+        return Response({
+            'success': False,
+            'message': 'Item not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    @action(detail=False, methods=['delete'])
+    def clear(self, request):
+        """Clear all items from cart"""
+        CartService.clear_cart(request.user)
+        return Response({
+            'success': True,
+            'message': 'Cart cleared'
+        })
+    
+    @action(detail=False, methods=['post'])
+    def checkout(self, request):
+        """Initiate checkout and create Razorpay order"""
+        cart = CartService.get_or_create_cart(request.user)
+        
+        try:
+            bundle_order, razorpay_order = CheckoutService.create_razorpay_order(cart)
+            return Response({
+                'success': True,
+                'bundle_order_id': bundle_order.id,
+                'razorpay_order_id': razorpay_order['id'],
+                'amount': bundle_order.total_amount,
+                'currency': 'INR',
+                'key_id': settings.RAZORPAY_KEY_ID
+            })
+        except Exception as e:
+            return Response({
+                'success': False,
+                'errors': e.detail if hasattr(e, 'detail') else str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['post'])
+    def verify(self, request):
+        """Verify payment and complete checkout"""
+        bundle_order_id = request.data.get('bundle_order_id')
+        payment_id = request.data.get('razorpay_payment_id')
+        signature = request.data.get('razorpay_signature')
+        
+        if not all([bundle_order_id, payment_id, signature]):
+            return Response({
+                'success': False,
+                'message': 'Missing required fields: bundle_order_id, razorpay_payment_id, razorpay_signature'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            bundle_order = BundleOrder.objects.get(
+                id=bundle_order_id, 
+                user=request.user
+            )
+        except BundleOrder.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Bundle order not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        try:
+            subscriptions = CheckoutService.complete_checkout(
+                bundle_order=bundle_order,
+                payment_id=payment_id,
+                signature=signature
+            )
+            
+            # Send confirmation email
+            try:
+                from notifications.services import send_bundle_order_confirmation_email
+                send_bundle_order_confirmation_email(request.user, bundle_order, subscriptions)
+            except Exception as e:
+                print(f"Failed to send bundle order confirmation email: {e}")
+            
+            return Response({
+                'success': True,
+                'message': f'Successfully subscribed to {len(subscriptions)} plan(s)',
+                'bundle_order': BundleOrderSerializer(bundle_order).data
+            })
+        except Exception as e:
+            return Response({
+                'success': False,
+                'errors': e.detail if hasattr(e, 'detail') else str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class BundleOrderViewSet(ListRetrieveCacheMixin, viewsets.ReadOnlyModelViewSet):
+    """ViewSet for viewing bundle orders (Owner dashboard)"""
+    permission_classes = [IsMessOwner]
+    
+    def get_queryset(self):
+        queryset = BundleOrder.objects.select_related('user').prefetch_related(
+            'subscriptions__plan'
+        ).all()
+        
+        # Filter by status
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        
+        # Filter by date range
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        if start_date:
+            queryset = queryset.filter(created_at__date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(created_at__date__lte=end_date)
+        
+        return queryset.order_by('-created_at')
+    
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return BundleOrderListSerializer
+        return BundleOrderSerializer
+    
+    @action(detail=False, methods=['get'])
+    @cache_get()
+    def stats(self, request):
+        """Get bundle order statistics"""
+        from django.db.models import Sum, Avg, Count
+        
+        queryset = self.get_queryset()
+        paid_orders = queryset.filter(status='PAID')
+        
+        stats = {
+            'total_orders': queryset.count(),
+            'paid_orders': paid_orders.count(),
+            'total_revenue': paid_orders.aggregate(Sum('total_amount'))['total_amount__sum'] or 0,
+            'average_order_value': paid_orders.aggregate(Avg('total_amount'))['total_amount__avg'] or 0,
+            'orders_this_month': queryset.filter(
+                created_at__month=timezone.now().month,
+                created_at__year=timezone.now().year
             ).count(),
         }
         return Response(stats)

@@ -1,14 +1,16 @@
 from rest_framework import serializers
-from .models import Plan, Subscription, Leave
+from .models import Plan, Subscription, Leave, Cart, CartItem, BundleOrder
 from django.utils import timezone
 from django.db import models
+from decimal import Decimal
+
 
 class PlanCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Plan
         fields = ['code', 'name', 'description', 'service_type', 'base_price', 
-                  'included_meals', 'can_add_breakfast', 'breakfast_addon_price', 
-                  'duration_days']
+                  'included_meals', 'duration_days', 'min_duration_days', 
+                  'max_duration_days', 'allow_custom_duration', 'daily_rate_override']
     
     def validate_code(self, value):
         """Ensure plan code is unique"""
@@ -27,42 +29,66 @@ class PlanCreateSerializer(serializers.ModelSerializer):
         if value <= 0 or value > 365:
             raise serializers.ValidationError("Duration must be between 1 and 365 days")
         return value
+    
+    def validate(self, data):
+        """Validate min/max duration constraints"""
+        min_days = data.get('min_duration_days', 7)
+        max_days = data.get('max_duration_days', 90)
+        if min_days > max_days:
+            raise serializers.ValidationError(
+                "Minimum duration cannot be greater than maximum duration"
+            )
+        return data
+
 
 class PlanSerializer(serializers.ModelSerializer):
+    daily_rate = serializers.SerializerMethodField()
+    
     class Meta:
         model = Plan
         fields = ['id', 'code', 'name', 'description', 'service_type', 'base_price', 
-                  'included_meals', 'can_add_breakfast', 'breakfast_addon_price', 
-                  'duration_days', 'is_active', 'created_at', 'updated_at']
+                  'included_meals', 'duration_days', 'min_duration_days', 
+                  'max_duration_days', 'allow_custom_duration', 'daily_rate',
+                  'is_active', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_daily_rate(self, obj):
+        return float(obj.get_daily_rate())
 
 
-# subscriptions/serializers.py
 class SubscriptionCreateSerializer(serializers.ModelSerializer):
+    duration_days = serializers.IntegerField(required=False, default=None)
+    
     class Meta:
         model = Subscription
-        fields = ['plan', 'breakfast_included']
+        fields = ['plan', 'duration_days']
     
     def validate(self, data):
         """Validate subscription creation rules"""
         user = self.context['request'].user
         plan = data['plan']
+        duration_days = data.get('duration_days') or plan.duration_days
+        
+        # Validate custom duration if provided
+        if not plan.validate_duration(duration_days):
+            raise serializers.ValidationError(
+                f"Duration must be between {plan.min_duration_days} and {plan.max_duration_days} days"
+            )
+        
+        data['duration_days'] = duration_days
         
         # 0. Ensure user profile is complete and service type matches preference
-        # Require profile completion for customers
         if getattr(user, 'user_type', None) in ['student', 'regular']:
             if getattr(user, 'status', '') != 'profile_complete':
                 raise serializers.ValidationError(
                     'Please complete your profile before subscribing to a plan.'
                 )
 
-            # Enforce that only one of the flags is true in case of inconsistent data
             if getattr(user, 'is_tiffin_user', False) and getattr(user, 'is_mess_user', False):
                 raise serializers.ValidationError(
                     'Your profile has both Tiffin and Mess selected. Please update your profile to select only one.'
                 )
 
-            # Match plan service type to user's selected preference
             if plan.service_type == 'tiffin' and not getattr(user, 'is_tiffin_user', False):
                 raise serializers.ValidationError(
                     'You have not selected Tiffin service in your profile. Update your profile to subscribe to Tiffin plans.'
@@ -91,46 +117,25 @@ class SubscriptionCreateSerializer(serializers.ModelSerializer):
             status='PENDING_PAYMENT'
         ).count()
         
-        if pending_subscriptions >= 2:  # Allow max 2 pending subscriptions
+        if pending_subscriptions >= 2:
             raise serializers.ValidationError(
                 "You can have maximum 2 pending subscriptions. "
                 "Please complete payment for existing subscriptions first."
             )
         
-        # # 3. Check for recent cancelled subscriptions (prevent abuse)
-        # from django.utils import timezone
-        # from datetime import timedelta
-        
-        # recent_cancelled = Subscription.objects.filter(
-        #     user=user,
-        #     plan=plan,
-        #     status='CANCELLED',
-        #     cancelled_at__gte=timezone.now() - timedelta(days=1)
-        # ).exists()
-        
-        # if recent_cancelled:
-        #     raise serializers.ValidationError(
-        #         f"You recently cancelled a subscription for {plan.name}. "
-        #         f"Please wait 24 hours before creating a new subscription for the same plan."
-        #     )
-        
         return data
     
     def create(self, validated_data):
         plan = validated_data['plan']
-        breakfast_included = validated_data.get('breakfast_included', False)
+        duration_days = validated_data.get('duration_days', plan.duration_days)
         
-        # Calculate pricing
-        base_price = plan.base_price
-        breakfast_addon_price = plan.breakfast_addon_price if breakfast_included else 0
-        total_paid = base_price + breakfast_addon_price
+        # Calculate pricing based on custom duration
+        total_paid = plan.calculate_price_for_duration(duration_days)
         
         subscription = Subscription.objects.create(
             user=self.context['request'].user,
             plan=plan,
-            breakfast_included=breakfast_included,
-            base_price=base_price,
-            breakfast_addon_price=breakfast_addon_price,
+            base_price=plan.base_price,
             total_paid=total_paid,
             status='PENDING_PAYMENT'
         )
@@ -144,10 +149,9 @@ class SubscriptionBasicSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Subscription
-        fields = ['id', 'plan', 'breakfast_included', 'base_price', 'breakfast_addon_price',
-                  'total_paid', 'start_date', 'base_end_date', 
-                  'adjusted_end_date', 'leave_days', 'status', 'cancelled_at',
-                  'refund_status', 'days_remaining', 'created_at']
+        fields = ['id', 'plan', 'base_price', 'total_paid', 'start_date', 
+                  'base_end_date', 'adjusted_end_date', 'leave_days', 'status', 
+                  'cancelled_at', 'refund_status', 'days_remaining', 'created_at']
     
     def get_refund_status(self, obj):
         """Get human-readable refund status"""
@@ -177,13 +181,13 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Subscription
-        fields = ['id', 'plan', 'breakfast_included', 'base_price', 'breakfast_addon_price',
-                  'total_paid', 'start_date', 'base_end_date', 
-                  'adjusted_end_date', 'leave_days', 'status', 'cancelled_at',
-                  'refund_status', 'refund_info', 'days_remaining', 'is_active', 'created_at']
-        read_only_fields = ['id', 'base_price', 'breakfast_addon_price', 'total_paid',
-                           'start_date', 'base_end_date', 
-                           'adjusted_end_date', 'leave_days', 'cancelled_at', 'created_at']
+        fields = ['id', 'plan', 'base_price', 'total_paid', 'start_date', 
+                  'base_end_date', 'adjusted_end_date', 'leave_days', 'status', 
+                  'cancelled_at', 'refund_status', 'refund_info', 'days_remaining', 
+                  'is_active', 'created_at', 'bundle_order']
+        read_only_fields = ['id', 'base_price', 'total_paid', 'start_date', 
+                           'base_end_date', 'adjusted_end_date', 'leave_days', 
+                           'cancelled_at', 'created_at']
     
     def get_refund_status(self, obj):
         """Get human-readable refund status"""
@@ -363,3 +367,114 @@ class ModifySubscriptionDaysSerializer(serializers.Serializer):
         if abs(value) > 365:
             raise serializers.ValidationError("Cannot modify by more than 365 days at once")
         return value
+
+
+# ============== Cart Serializers ==============
+
+class CartItemSerializer(serializers.ModelSerializer):
+    """Serializer for cart items with calculated price"""
+    plan = PlanSerializer(read_only=True)
+    plan_name = serializers.CharField(source='plan.name', read_only=True)
+    daily_rate = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    calculated_price = serializers.IntegerField(read_only=True)
+    
+    class Meta:
+        model = CartItem
+        fields = ['id', 'plan', 'plan_name', 'custom_duration_days', 'daily_rate', 
+                  'calculated_price', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class CartSerializer(serializers.ModelSerializer):
+    """Serializer for user's cart with all items"""
+    items = CartItemSerializer(many=True, read_only=True)
+    total = serializers.SerializerMethodField()
+    item_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Cart
+        fields = ['id', 'items', 'total', 'item_count', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_total(self, obj):
+        return obj.get_total()
+    
+    def get_item_count(self, obj):
+        return obj.get_item_count()
+
+
+class AddToCartSerializer(serializers.Serializer):
+    """Serializer for adding a plan to cart"""
+    plan_id = serializers.IntegerField(required=True)
+    duration_days = serializers.IntegerField(required=False, default=30)
+    
+    def validate_plan_id(self, value):
+        """Validate plan exists and is active"""
+        try:
+            plan = Plan.objects.get(id=value, is_active=True)
+        except Plan.DoesNotExist:
+            raise serializers.ValidationError("Plan not found or inactive")
+        return value
+    
+    def validate(self, data):
+        """Validate duration is within plan's allowed range"""
+        plan = Plan.objects.get(id=data['plan_id'])
+        duration = data.get('duration_days', plan.duration_days)
+        
+        if not plan.validate_duration(duration):
+            raise serializers.ValidationError({
+                'duration_days': f"Duration must be between {plan.min_duration_days} and {plan.max_duration_days} days"
+            })
+        
+        data['plan'] = plan
+        data['duration_days'] = duration
+        return data
+
+
+class UpdateDurationSerializer(serializers.Serializer):
+    """Serializer for updating cart item duration"""
+    duration_days = serializers.IntegerField(required=True, min_value=1)
+    
+    def validate_duration_days(self, value):
+        """Basic validation - plan-specific validation done in view"""
+        if value > 365:
+            raise serializers.ValidationError("Duration cannot exceed 365 days")
+        return value
+
+
+class BundleOrderSerializer(serializers.ModelSerializer):
+    """Serializer for bundle orders"""
+    subscriptions = SubscriptionBasicSerializer(many=True, read_only=True)
+    subscription_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = BundleOrder
+        fields = ['id', 'total_amount', 'status', 'razorpay_order_id', 
+                  'razorpay_payment_id', 'subscriptions', 'subscription_count',
+                  'created_at', 'paid_at']
+        read_only_fields = ['id', 'created_at', 'paid_at']
+    
+    def get_subscription_count(self, obj):
+        return obj.get_subscription_count()
+
+
+class BundleOrderListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for bundle order lists"""
+    subscription_count = serializers.SerializerMethodField()
+    user_info = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = BundleOrder
+        fields = ['id', 'user_info', 'total_amount', 'status', 
+                  'subscription_count', 'created_at', 'paid_at']
+    
+    def get_subscription_count(self, obj):
+        return obj.get_subscription_count()
+    
+    def get_user_info(self, obj):
+        return {
+            'id': obj.user.id,
+            'username': obj.user.username,
+            'email': obj.user.email,
+            'phone': getattr(obj.user, 'phone', None)
+        }

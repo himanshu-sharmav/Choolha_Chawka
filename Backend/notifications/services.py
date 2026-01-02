@@ -632,3 +632,16 @@ def send_security_alert_sms(user, alert_message):
             logger.error(f"❌ Failed to queue security alert SMS task: {str(e)}")
             return NotificationService.send_security_alert_sms(user, alert_message)
     return NotificationService.send_security_alert_sms(user, alert_message)
+
+
+# Bundle Order Confirmation Email
+def send_bundle_order_confirmation_email(user, bundle_order, subscriptions):
+    """Send confirmation email for bundle order with multiple subscriptions"""
+    context = {
+        'bundle_order': bundle_order,
+        'subscriptions': subscriptions,
+        'total_amount': bundle_order.total_amount,
+        'subscription_count': len(subscriptions),
+        'dashboard_url': f"{settings.FRONTEND_URL}/dashboard",
+    }
+    return NotificationService.send_notification(user, 'bundle_order_confirmation', context)
