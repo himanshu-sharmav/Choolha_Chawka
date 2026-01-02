@@ -253,13 +253,36 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Celery Configuration
 REDIS_URL = env("REDIS_URL", default="redis://localhost:6379")
-
 CELERY_BROKER_URL = CELERY_RESULT_BACKEND = REDIS_URL
+
+# Handle Upstash Redis SSL requirements
+if REDIS_URL.startswith('rediss://'):
+    # Upstash requires SSL cert params
+    if 'ssl_cert_reqs' not in REDIS_URL:
+        # Add SSL cert requirement parameter
+        if '?' in REDIS_URL:
+            REDIS_URL = f"{REDIS_URL}&ssl_cert_reqs=CERT_REQUIRED"
+        else:
+            REDIS_URL = f"{REDIS_URL}?ssl_cert_reqs=CERT_REQUIRED"
+
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_TASK_ALWAYS_EAGER = False
 
 # Celery connection and timeout settings
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_BROKER_CONNECTION_TIMEOUT = 30
+
+# SSL settings for Upstash Redis
+if REDIS_URL.startswith('rediss://'):
+    import ssl
+    CELERY_BROKER_USE_SSL = {
+        'ssl_cert_reqs': ssl.CERT_REQUIRED,
+    }
+    CELERY_REDIS_BACKEND_USE_SSL = {
+        'ssl_cert_reqs': ssl.CERT_REQUIRED,
+    }
+
 CELERY_BROKER_TRANSPORT_OPTIONS = {
     'socket_timeout': 30,
     'socket_connect_timeout': 30,
@@ -344,15 +367,23 @@ EMAIL_USE_LOCALTIME = False
 SUPPORT_EMAIL = env('SUPPORT_EMAIL', default='Choolhachowka.com')
 WHITENOISE_USE_FINDERS = True
 
-FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:5173')  # Placeholder URL
-# WHITENOISE_USE_FINDERS = True
+FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:5173')
 
 # Cache configuration (Redis backed)
 CACHE_TTL = env.int('CACHE_TTL', default=120)  # seconds
+
+# Build cache URL with SSL params for Upstash
+_cache_redis_url = env('REDIS_URL', default='redis://127.0.0.1:6379/1')
+if _cache_redis_url.startswith('rediss://') and 'ssl_cert_reqs' not in _cache_redis_url:
+    if '?' in _cache_redis_url:
+        _cache_redis_url = f"{_cache_redis_url}&ssl_cert_reqs=CERT_REQUIRED"
+    else:
+        _cache_redis_url = f"{_cache_redis_url}?ssl_cert_reqs=CERT_REQUIRED"
+
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': env('REDIS_URL', default='redis://127.0.0.1:6379/1'),
+        'LOCATION': _cache_redis_url,
         'TIMEOUT': env.int('CACHE_DEFAULT_TIMEOUT', default=300),
         'KEY_PREFIX': env('CACHE_KEY_PREFIX', default='cc'),
     }
