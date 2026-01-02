@@ -14,6 +14,7 @@ from pathlib import Path
 import os
 import environ
 import dj_database_url
+from celery.schedules import crontab
 
 env = environ.Env()
 env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env.development')
@@ -275,11 +276,15 @@ CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_BEAT_SCHEDULE = {
     'update-expired-subscriptions': {
         'task': 'subscriptions.tasks.update_expired_subscriptions',
-        'schedule': 60.0 * 60 * 24,  # Run every 24 hours
+        'schedule': crontab(hour=0, minute=0),  # Run at midnight every day
     },
     'send-expiry-notifications': {
         'task': 'subscriptions.tasks.send_expiry_notifications',
-        'schedule': 60.0 * 60 * 24,  # Run every 24 hours
+        'schedule': crontab(hour=9, minute=0),  # Run at 9 AM every day
+    },
+    'cleanup-old-otp-records': {
+        'task': 'accounts.tasks.cleanup_old_otp_records',
+        'schedule': crontab(hour=2, minute=0),  # Run at 2 AM every day
     },
 }
 

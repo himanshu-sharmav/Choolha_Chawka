@@ -421,10 +421,14 @@ def async_send_subscription_renewed_email(self, user_id, subscription_id):
     except Exception as e:
         logger.error(f"❌ [async_send_subscription_renewed_email] Failed for user_id {user_id}: {str(e)}")
 
-@shared_task
-def async_send_subscription_expiring_email(user_id, subscription_id):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
+def async_send_subscription_expiring_email(self, user_id, subscription_id):
     logger.info(f"🚀 [async_send_subscription_expiring_email] Starting for user_id: {user_id}, subscription_id: {subscription_id}")
     try:
+        # Add database connection retry logic
+        from django.db import connection
+        connection.ensure_connection()
+        
         user = _get_user(user_id)
         from subscriptions.models import Subscription
         subscription = Subscription.objects.get(id=subscription_id)
@@ -449,12 +453,16 @@ def async_send_subscription_expiring_email(user_id, subscription_id):
             to=[user.email]
         )
         msg.attach_alternative(html_message, "text/html")
+        
+        logger.info(f"📧 [async_send_subscription_expiring_email] Attempting to send email to {user.email}")
         msg.send()
         
         logger.info(f"✅ [async_send_subscription_expiring_email] Email sent to {user.email}")
         
     except Exception as e:
         logger.error(f"❌ [async_send_subscription_expiring_email] Failed for user_id {user_id}: {str(e)}")
+        # Re-raise to trigger Celery retry
+        raise
 
 
 # Leave Management Tasks

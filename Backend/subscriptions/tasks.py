@@ -13,12 +13,17 @@ logger = logging.getLogger(__name__)
 def update_expired_subscriptions():
     """
     Celery task to update subscription statuses to EXPIRED
-    Runs every hour to catch expired subscriptions
+    Runs at midnight every day to catch expired subscriptions
     """
     logger.info("🔄 Starting update_expired_subscriptions task")
     
     try:
         today = timezone.now().date()
+        current_time = timezone.now()
+        
+        logger.info(f"📅 Current date: {today}")
+        logger.info(f"🕐 Current time: {current_time}")
+        logger.info(f"🌍 Timezone: {timezone.get_current_timezone()}")
         
         # Find subscriptions that should be expired but are still active
         expired_subscriptions = Subscription.objects.filter(
@@ -27,6 +32,11 @@ def update_expired_subscriptions():
         ).select_related('user', 'plan')
         
         count = expired_subscriptions.count()
+        
+        # Log all active subscriptions for debugging
+        all_active = Subscription.objects.filter(status='ACTIVE').count()
+        logger.info(f"📊 Total active subscriptions: {all_active}")
+        logger.info(f"🔍 Subscriptions that should be expired: {count}")
         
         if count == 0:
             logger.info("✅ No expired subscriptions found")
@@ -40,7 +50,7 @@ def update_expired_subscriptions():
             
             logger.info(
                 f"📅 Updating subscription for {subscription.user.username} "
-                f"(expired {days_overdue} days ago)"
+                f"(Plan: {subscription.plan.name}, expired {days_overdue} days ago, end date: {subscription.adjusted_end_date})"
             )
             
             # Update subscription status
@@ -57,6 +67,7 @@ def update_expired_subscriptions():
         
     except Exception as e:
         logger.error(f"❌ Error in update_expired_subscriptions task: {str(e)}")
+        logger.exception("Full traceback:")
         raise
 
 

@@ -192,14 +192,7 @@ class ResendOTPView(APIView):
                     'message': 'Phone already verified. Please login.'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Check throttling
-            if not OTPThrottle.can_send_otp(phone):
-                return Response({
-                    'success': False,
-                    'message': 'Too many verification attempts. Please try again later.'
-                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
-            
-            # Generate and send new OTP
+            # Generate and send new OTP (throttling is handled inside)
             otp, sent = user.generate_and_send_otp()
             
             if sent:
