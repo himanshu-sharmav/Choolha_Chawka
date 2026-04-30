@@ -4,8 +4,16 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.template.loader import render_to_string
+from django.views import View
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+import json
+import logging
+import hmac
+import hashlib
 from core.permissions import IsCustomer, IsMessOwner
 from .models import Payment, RazorpayOrder, RefundRequest
 from .serializers import (
@@ -18,6 +26,8 @@ from subscriptions.models import Subscription
 from django.conf import settings
 # from notifications.services import send_refund_processed_email, send_refund_rejected_email
 from notifications.services import NotificationService
+
+logger = logging.getLogger(__name__)
 import io
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
@@ -433,3 +443,144 @@ class RefundRequestViewSet(viewsets.ModelViewSet):
         approved_refunds = self.get_queryset().filter(status='APPROVED')
         serializer = self.get_serializer(approved_refunds, many=True)
         return Response(serializer.data)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class RazorpayWebhookView(View):
+    """
+    Razorpay Webhook Handler
+    
+    This view handles Razorpay webhook events to update payment status
+    reliably without depending on frontend confirmation.
+    """
+    
+    def post(self, request):
+        """Handle Razorpay webhook events"""
+        try:
+            # Get the raw request body
+            body = request.body.decode('utf-8')
+            webhook_signature = request.META.get('HTTP_X_RAZORPAY_SIGNATURE', '')
+            
+            logger.info(f"🔔 [RazorpayWebhook] Received webhook: {body[:200]}...")
+            
+            # Verify webhook signature
+            if not self._verify_webhook_signature(body, webhook_signature):
+                logger.error("❌ [RazorpayWebhook] Invalid webhook signature")
+                return JsonResponse({'error': 'Invalid signature'}, status=400)
+            
+            # Parse webhook data
+            webhook_data = json.loads(body)
+            event_type = webhook_data.get('event')
+            
+            logger.info(f"🔔 [RazorpayWebhook] Processing event: {event_type}")
+            
+            # Handle different event types
+            if event_type == 'payment.captured':
+                return self._handle_payment_captured(webhook_data)
+            elif event_type == 'payment.failed':
+                return self._handle_payment_failed(webhook_data)
+            elif event_type == 'order.paid':
+                return self._handle_order_paid(webhook_data)
+            else:
+                logger.info(f"ℹ️ [RazorpayWebhook] Unhandled event type: {event_type}")
+                return JsonResponse({'status': 'ignored'}, status=200)
+                
+        except json.JSONDecodeError:
+            logger.error("❌ [RazorpayWebhook] Invalid JSON in webhook body")
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        except Exception as e:
+            logger.error(f"❌ [RazorpayWebhook] Error processing webhook: {str(e)}")
+            return JsonResponse({'error': 'Internal server error'}, status=500)
+    
+    def _verify_webhook_signature(self, body, signature):
+        """Verify Razorpay webhook signature"""
+        try:
+            webhook_secret = getattr(settings, 'RAZORPAY_WEBHOOK_SECRET', '')
+            if not webhook_secret:
+                logger.warning("⚠️ [RazorpayWebhook] No webhook secret configured")
+                return True  # Allow if no secret is configured (for development)
+            
+            expected_signature = hmac.new(
+                webhook_secret.encode('utf-8'),
+                body.encode('utf-8'),
+                hashlib.sha256
+            ).hexdigest()
+            
+            return hmac.compare_digest(signature, expected_signature)
+        except Exception as e:
+            logger.error(f"❌ [RazorpayWebhook] Error verifying signature: {str(e)}")
+            return False
+    
+    def _handle_payment_captured(self, webhook_data):
+        """Handle payment.captured event"""
+        try:
+            payment_data = webhook_data.get('payload', {}).get('payment', {})
+            order_id = payment_data.get('order_id')
+            payment_id = payment_data.get('id')
+            
+            logger.info(f"💰 [RazorpayWebhook] Payment captured: {payment_id} for order: {order_id}")
+            
+            # Update payment status using the service
+            result = razorpay_service.handle_webhook_payment_captured(
+                order_id=order_id,
+                payment_id=payment_id,
+                payment_data=payment_data
+            )
+            
+            if result['success']:
+                logger.info(f"✅ [RazorpayWebhook] Successfully processed payment: {payment_id}")
+                return JsonResponse({'status': 'success'}, status=200)
+            else:
+                logger.error(f"❌ [RazorpayWebhook] Failed to process payment: {result['error']}")
+                return JsonResponse({'error': result['error']}, status=400)
+                
+        except Exception as e:
+            logger.error(f"❌ [RazorpayWebhook] Error handling payment captured: {str(e)}")
+            return JsonResponse({'error': 'Failed to process payment'}, status=500)
+    
+    def _handle_payment_failed(self, webhook_data):
+        """Handle payment.failed event"""
+        try:
+            payment_data = webhook_data.get('payload', {}).get('payment', {})
+            order_id = payment_data.get('order_id')
+            payment_id = payment_data.get('id')
+            error_code = payment_data.get('error_code', '')
+            error_description = payment_data.get('error_description', '')
+            
+            logger.info(f"💸 [RazorpayWebhook] Payment failed: {payment_id} for order: {order_id}")
+            logger.info(f"💸 [RazorpayWebhook] Error: {error_code} - {error_description}")
+            
+            # Update payment status using the service
+            result = razorpay_service.handle_webhook_payment_failed(
+                order_id=order_id,
+                payment_id=payment_id,
+                error_code=error_code,
+                error_description=error_description,
+                payment_data=payment_data
+            )
+            
+            if result['success']:
+                logger.info(f"✅ [RazorpayWebhook] Successfully processed failed payment: {payment_id}")
+                return JsonResponse({'status': 'success'}, status=200)
+            else:
+                logger.error(f"❌ [RazorpayWebhook] Failed to process failed payment: {result['error']}")
+                return JsonResponse({'error': result['error']}, status=400)
+                
+        except Exception as e:
+            logger.error(f"❌ [RazorpayWebhook] Error handling payment failed: {str(e)}")
+            return JsonResponse({'error': 'Failed to process failed payment'}, status=500)
+    
+    def _handle_order_paid(self, webhook_data):
+        """Handle order.paid event (alternative to payment.captured)"""
+        try:
+            order_data = webhook_data.get('payload', {}).get('order', {})
+            order_id = order_data.get('id')
+            
+            logger.info(f"📦 [RazorpayWebhook] Order paid: {order_id}")
+            
+            # This is handled by payment.captured, but we can log it
+            return JsonResponse({'status': 'success'}, status=200)
+            
+        except Exception as e:
+            logger.error(f"❌ [RazorpayWebhook] Error handling order paid: {str(e)}")
+            return JsonResponse({'error': 'Failed to process order paid'}, status=500)

@@ -253,13 +253,24 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Celery Configuration
 REDIS_URL = env("REDIS_URL", default="redis://localhost:6379")
-
-CELERY_BROKER_URL = CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_TASK_ALWAYS_EAGER = False
 
 # Celery connection and timeout settings
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_BROKER_CONNECTION_TIMEOUT = 30
+
+# SSL settings for Upstash Redis
+if REDIS_URL.startswith('rediss://'):
+    import ssl
+    CELERY_BROKER_USE_SSL = {
+        'ssl_cert_reqs': ssl.CERT_REQUIRED,
+    }
+    CELERY_REDIS_BACKEND_USE_SSL = {
+        'ssl_cert_reqs': ssl.CERT_REQUIRED,
+    }
+
 CELERY_BROKER_TRANSPORT_OPTIONS = {
     'socket_timeout': 30,
     'socket_connect_timeout': 30,
@@ -298,6 +309,7 @@ TWILIO_PHONE_NUMBER = env('TWILIO_PHONE_NUMBER')
 # Razorpay settings
 RAZORPAY_KEY_ID = env('RAZORPAY_KEY_ID')
 RAZORPAY_KEY_SECRET = env('RAZORPAY_KEY_SECRET')
+RAZORPAY_WEBHOOK_SECRET = env('RAZORPAY_WEBHOOK_SECRET', default='')
 
 
 STORAGES = {
@@ -343,19 +355,37 @@ EMAIL_USE_LOCALTIME = False
 SUPPORT_EMAIL = env('SUPPORT_EMAIL', default='Choolhachowka.com')
 WHITENOISE_USE_FINDERS = True
 
-FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:5173')  # Placeholder URL
-# WHITENOISE_USE_FINDERS = True
+FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:5173')
 
 # Cache configuration (Redis backed)
 CACHE_TTL = env.int('CACHE_TTL', default=120)  # seconds
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': env('REDIS_URL', default='redis://127.0.0.1:6379/1'),
-        'TIMEOUT': env.int('CACHE_DEFAULT_TIMEOUT', default=300),
-        'KEY_PREFIX': env('CACHE_KEY_PREFIX', default='cc'),
+
+# Build cache URL for Redis
+_cache_redis_url = env('REDIS_URL', default='redis://127.0.0.1:6379/1')
+
+# Configure cache with proper SSL for Upstash
+if _cache_redis_url.startswith('rediss://'):
+    import ssl
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': _cache_redis_url,
+            'TIMEOUT': env.int('CACHE_DEFAULT_TIMEOUT', default=300),
+            'KEY_PREFIX': env('CACHE_KEY_PREFIX', default='cc'),
+            'OPTIONS': {
+                'ssl_cert_reqs': ssl.CERT_REQUIRED,
+            }
+        }
     }
-}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': _cache_redis_url,
+            'TIMEOUT': env.int('CACHE_DEFAULT_TIMEOUT', default=300),
+            'KEY_PREFIX': env('CACHE_KEY_PREFIX', default='cc'),
+        }
+    }
 NOTIFICATIONS_ASYNC = env.bool('NOTIFICATIONS_ASYNC', default=False)
 
 # Logging configuration
